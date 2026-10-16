@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <!-- CO-NERS 26 KELOMPOK 2 UMKT OFFICIAL EMBLEM -->
+  <defs>
+    <!-- Soft Background Gradient -->
+    <radialGradient id="innerCyanBg" cx="50%" cy="46%" r="50%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="65%" stop-color="#F2FBFC" />
+      <stop offset="100%" stop-color="#DCF4F7" />
+    </radialGradient>
+
+    <!-- Teal Border Gradient -->
+    <linearGradient id="tealRing" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00A7BA" />
+      <stop offset="50%" stop-color="#0096A6" />
+      <stop offset="100%" stop-color="#008394" />
+    </linearGradient>
+
+    <!-- Gold Wheat Gradient -->
+    <linearGradient id="wheatGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F9D423" />
+      <stop offset="100%" stop-color="#EAA812" />
+    </linearGradient>
+
+    <!-- Drop Shadow for Banner -->
+    <filter id="bannerShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#006064" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Outer Cyan / Teal Main Circle -->
+  <circle cx="250" cy="235" r="200" fill="url(#innerCyanBg)" stroke="url(#tealRing)" stroke-width="20" />
+  
+  <!-- Inner Thin Ring -->
+  <circle cx="250" cy="235" r="165" fill="none" stroke="#0096A6" stroke-width="3" stroke-dasharray="8,5" opacity="0.45" />
+  <circle cx="250" cy="235" r="158" fill="none" stroke="#00A7BA" stroke-width="2" />
+
+  <!-- Top Arc Text: CO-NERS 26 -->
+  <path id="arcCoNers" d="M 125 235 A 125 125 0 0 1 375 235" fill="none" stroke="none" />
+  <text font-family="'Arial Black', 'Montserrat', Impact, sans-serif" font-size="33" font-weight="900" fill="#F39C12" stroke="#E67E22" stroke-width="1.2" letter-spacing="3">
+    <textPath href="#arcCoNers" startOffset="50%" text-anchor="middle">
+      CO-NERS 26
+    </textPath>
+  </text>
+
+  <!-- Sub-Arc Text: LEARNING · CARING · GROWING -->
+  <path id="arcMotto" d="M 148 235 A 102 102 0 0 1 352 235" fill="none" stroke="none" />
+  <text font-family="'Arial Black', 'Montserrat', sans-serif" font-size="18.5" font-weight="900" fill="#008394" letter-spacing="2">
+    <textPath href="#arcMotto" startOffset="50%" text-anchor="middle">
+      LEARNING · CARING · GROWING
+    </textPath>
+  </text>
+
+  <!-- Left Wheat/Paddy Branch -->
+  <g fill="url(#wheatGold)" stroke="#D68910" stroke-width="0.7">
+    <!-- Branch Stem -->
+    <path d="M 172 232 C 160 270 178 315 232 342" fill="none" stroke="#EAA812" stroke-width="3.5" stroke-linecap="round" />
+    <!-- Wheat grains left side -->
+    <ellipse cx="168" cy="240" rx="6" ry="14" transform="rotate(-35 168 240)" />
+    <ellipse cx="178" cy="248" rx="6" ry="14" transform="rotate(-15 178 248)" />
+    <ellipse cx="168" cy="264" rx="6.5" ry="14" transform="rotate(-40 168 264)" />
+    <ellipse cx="180" cy="272" rx="6.5" ry="14" transform="rotate(-15 180 272)" />
+    <ellipse cx="174" cy="290" rx="7" ry="15" transform="rotate(-45 174 290)" />
+    <ellipse cx="188" cy="296" rx="7" ry="15" transform="rotate(-20 188 296)" />
+    <ellipse cx="188" cy="314" rx="7.5" ry="15" transform="rotate(-50 188 314)" />
+    <ellipse cx="204" cy="318" rx="7.5" ry="15" transform="rotate(-25 204 318)" />
+    <ellipse cx="212" cy="332" rx="7.5" ry="15" transform="rotate(-60 212 332)" />
+    <ellipse cx="228" cy="334" rx="7.5" ry="15" transform="rotate(-35 228 334)" />
+  </g>
+
+  <!-- Right Wheat/Paddy Branch -->
+  <g fill="url(#wheatGold)" stroke="#D68910" stroke-width="0.7">
+    <!-- Branch Stem -->
+    <path d="M 328 232 C 340 270 322 315 268 342" fill="none" stroke="#EAA812" stroke-width="3.5" stroke-linecap="round" />
+    <!-- Wheat grains right side -->
+    <ellipse cx="332" cy="240" rx="6" ry="14" transform="rotate(35 332 240)" />
+    <ellipse cx="322" cy="248" rx="6" ry="14" transform="rotate(15 322 248)" />
+    <ellipse cx="332" cy="264" rx="6.5" ry="14" transform="rotate(40 332 264)" />
+    <ellipse cx="320" cy="272" rx="6.5" ry="14" transform="rotate(15 320 272)" />
+    <ellipse cx="326" cy="290" rx="7" ry="15" transform="rotate(45 326 290)" />
+    <ellipse cx="312" cy="296" rx="7" ry="15" transform="rotate(20 312 296)" />
+    <ellipse cx="312" cy="314" rx="7.5" ry="15" transform="rotate(50 312 314)" />
+    <ellipse cx="296" cy="318" rx="7.5" ry="15" transform="rotate(25 296 318)" />
+    <ellipse cx="288" cy="332" rx="7.5" ry="15" transform="rotate(60 288 332)" />
+    <ellipse cx="272" cy="334" rx="7.5" ry="15" transform="rotate(35 272 334)" />
+  </g>
+
+  <!-- CADUCEUS (Medical/Nursing Symbol) IN CENTER (Black) -->
+  <g id="caduceus" fill="#1C1C1C" stroke="#1C1C1C">
+    <!-- Top Sphere of Staff -->
+    <circle cx="250" cy="180" r="10" />
+
+    <!-- Staff Body -->
+    <rect x="247" y="186" width="6" height="142" rx="3" />
+    <!-- Staff Base tip -->
+    <polygon points="246,328 254,328 250,338" />
+
+    <!-- Wings Spreading from Top -->
+    <!-- Left Wing -->
+    <path d="M 247 192 C 220 188 185 192 182 195 C 196 200 205 208 214 216 C 202 216 195 218 194 220 C 206 223 216 226 226 228 C 218 229 212 231 210 234 C 222 235 235 233 247 222 Z" />
+    <!-- Right Wing -->
+    <path d="M 253 192 C 280 188 315 192 318 195 C 304 200 295 208 286 216 C 298 216 305 218 306 220 C 294 223 284 226 274 228 C 282 229 288 231 290 234 C 278 235 265 233 253 222 Z" />
+
+    <!-- Coiled Serpents around the Staff -->
+    <!-- Loop 1 (Top) -->
+    <path d="M 250 208 C 228 206 220 226 242 236 C 265 246 274 256 250 268 C 228 278 224 290 248 300 C 270 308 266 322 250 326" fill="none" stroke="#1C1C1C" stroke-width="6.5" stroke-linecap="round" />
+    <path d="M 250 208 C 272 206 280 226 258 236 C 235 246 226 256 250 268 C 272 278 276 290 252 300 C 230 308 234 322 250 326" fill="none" stroke="#1C1C1C" stroke-width="6.5" stroke-linecap="round" />
+    
+    <!-- Serpent Heads -->
+    <circle cx="230" cy="214" r="5" />
+    <circle cx="270" cy="214" r="5" />
+  </g>
+
+  <!-- Text "UMKT" Below Caduceus -->
+  <text x="250" y="370" font-family="'Arial Black', Impact, sans-serif" font-size="28" font-weight="900" fill="#2E184D" text-anchor="middle" letter-spacing="1.5">
+    UMKT
+  </text>
+
+  <!-- BOTTOM CURVED RIBBON / BANNER: KELOMPOK 2 -->
+  <g id="bottomRibbon" filter="url(#bannerShadow)" transform="translate(0, 5)">
+    <!-- Left Ribbon Tail / Fold -->
+    <path d="M 68 418 L 118 392 L 118 438 L 88 456 Z" fill="#90A4AE" stroke="#0096A6" stroke-width="2.5" />
+    <!-- Right Ribbon Tail / Fold -->
+    <path d="M 432 418 L 382 392 L 382 438 L 412 456 Z" fill="#90A4AE" stroke="#0096A6" stroke-width="2.5" />
+
+    <!-- Ribbon Fold Roll Accents -->
+    <ellipse cx="98" cy="425" rx="14" ry="18" fill="#B0BEC5" stroke="#0096A6" stroke-width="2" />
+    <ellipse cx="402" cy="425" rx="14" ry="18" fill="#B0BEC5" stroke="#0096A6" stroke-width="2" />
+
+    <!-- Main Parchment Banner Body -->
+    <path d="M 96 422 C 180 395 320 395 404 422 C 400 458 375 464 250 458 C 125 464 100 458 96 422 Z" fill="#FFFFFF" stroke="#0096A6" stroke-width="3.5" />
+    
+    <!-- Banner Edge Ruffle Details -->
+    <path d="M 112 430 Q 120 422 135 425" fill="none" stroke="#00A7BA" stroke-width="1.5" />
+    <path d="M 388 430 Q 380 422 365 425" fill="none" stroke="#00A7BA" stroke-width="1.5" />
+
+    <!-- Text: KELOMPOK 2 in Bold Teal/Cyan -->
+    <text x="250" y="444" font-family="'Arial Black', Impact, 'Trebuchet MS', sans-serif" font-size="34" font-weight="900" fill="#008394" text-anchor="middle" letter-spacing="2.5">
+      KELOMPOK 2
+    </text>
+  </g>
+</svg>

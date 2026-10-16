@@ -1,0 +1,8 @@
+{
+  "name": "ETAM CARE - Sistem Manajemen Keperawatan Terpadu",
+  "description": "Aplikasi manajemen asuhan keperawatan terpadu yang sederhana, cepat, dan mobile-first untuk perawat rumah sakit.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

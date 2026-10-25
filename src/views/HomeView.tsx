@@ -20,12 +20,13 @@ import {
   Droplet,
   ShieldCheck,
 } from 'lucide-react';
-import { Patient, VitalSign, NursingAction, SOAPNote, SBARHandover } from '../types';
+import { Patient, VitalSign, NursingAction, SOAPNote, SBARHandover, DoctorDPJP } from '../types';
 import { UserSession } from '../services/storageService';
 import { MainMenuTab } from '../components/Header';
 
 interface HomeViewProps {
   patients: Patient[];
+  doctors?: DoctorDPJP[];
   actions: NursingAction[];
   soaps: SOAPNote[];
   handovers: SBARHandover[];
@@ -44,6 +45,7 @@ interface HomeViewProps {
 
 export const HomeView: React.FC<HomeViewProps> = ({
   patients,
+  doctors = [],
   actions,
   soaps,
   handovers,
@@ -538,7 +540,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
                       <strong>Dx:</strong> {patient.medicalDiagnosis}
                     </div>
                     <div className="text-[11px] text-slate-500 shrink-0">
-                      DPJP: {patient.dpjps?.[0]?.split(',')[0] || patient.dpjp?.split(',')[0] || '-'}
+                      DPJP: {(() => {
+                        const raw = patient.dpjps?.[0] || patient.dpjp || '';
+                        const trimmed = raw.trim();
+                        if (trimmed === '1' || trimmed === 'doc-1') {
+                          return doctors[0]?.name?.split(',')[0] || '-';
+                        }
+                        const match = doctors.find(d => d.id === trimmed || d.name.toLowerCase() === trimmed.toLowerCase());
+                        return (match?.name || raw || '-').split(',')[0];
+                      })()}
                     </div>
                   </div>
 

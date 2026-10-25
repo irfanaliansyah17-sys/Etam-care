@@ -27,7 +27,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     badge?: number;
   }[] = [
     { id: 'beranda', label: 'Beranda', icon: Home },
-    { id: 'dpjp', label: 'DPJP', icon: Stethoscope, badge: pendingActionsCount > 0 ? pendingActionsCount : undefined },
+    { id: 'dpjp', label: 'DPJP', icon: Stethoscope },
     { id: 'perawat', label: 'Perawat', icon: UserCheck2 },
     { id: 'handover', label: 'Handover', icon: ArrowRightLeft },
     { id: 'laporan', label: 'Laporan', icon: FileText },

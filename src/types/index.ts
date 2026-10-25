@@ -103,6 +103,9 @@ export interface Patient {
   allergies?: string;
   notes?: string;
 
+  // Hasil Laboratorium & Penunjang (Hb, Leukosit, Trombosit, dll - tersusun ke bawah poin per poin)
+  labResults?: string;
+
   // Discharge / Transfer / Deceased records
   dischargeDate?: string;
   dischargeTime?: string;
@@ -116,6 +119,16 @@ export interface Patient {
   deceasedDate?: string;
   deceasedTime?: string;
   deceasedNotes?: string;
+}
+
+export interface GdsRecord {
+  id: string;
+  patientId: string;
+  timestamp: string; // YYYY-MM-DD HH:mm
+  gds: number; // Kadar Gula Darah Sewaktu (mg/dL)
+  condition?: string; // e.g. "GDS Sewaktu", "GDP (Puasa)", "GDS 2 Jam PP", "Sebelum Tidur"
+  nurseName: string;
+  notes?: string;
 }
 
 export interface VitalSign {

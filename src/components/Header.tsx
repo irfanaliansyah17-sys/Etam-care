@@ -219,11 +219,6 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Icon className="w-4 h-4" />
                   <span>{item.label}</span>
-                  {item.id === 'dpjp' && pendingActionsCount > 0 && (
-                    <span className="ml-1 px-1.5 py-0.2 rounded-full bg-amber-400 text-amber-950 text-[10px] font-black">
-                      {pendingActionsCount}
-                    </span>
-                  )}
                   {isActive && (
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
                   )}

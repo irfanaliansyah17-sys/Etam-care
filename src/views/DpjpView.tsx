@@ -18,6 +18,7 @@ import {
   AlertCircle,
   ClipboardList,
   Save,
+  FlaskConical,
 } from 'lucide-react';
 import {
   DoctorDPJP,
@@ -47,6 +48,7 @@ interface DpjpViewProps {
   onOpenAddAction?: (patient: Patient) => void;
   onUpdatePlannedActions?: (patientId: string, plannedActions: string) => void;
   onUpdatePatientDpjp?: (patientId: string, primaryDpjp: string, dpjps: string[]) => void;
+  onUpdatePatientLabResults?: (patientId: string, labResults: string) => void;
   onSaveAction?: (actionData: Omit<NursingAction, 'id'>) => void;
   onSelectPatientDetail: (patient: Patient) => void;
 }
@@ -72,6 +74,7 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
   onOpenAddAction,
   onUpdatePlannedActions,
   onUpdatePatientDpjp,
+  onUpdatePatientLabResults,
   onSaveAction,
   onSelectPatientDetail,
 }) => {
@@ -113,6 +116,39 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
   const [plannedActionInput, setPlannedActionInput] = useState('');
 
   // ==========================================
+  // MODAL STATE: CATAT / UBAH HASIL LABORATORIUM
+  // ==========================================
+  const [labModalPatient, setLabModalPatient] = useState<Patient | null>(null);
+  const [labModalInput, setLabModalInput] = useState('');
+
+  // Helper to resolve doctor name from ID or name (prevents numeric bug like "1")
+  const resolveDoctorName = (nameOrId: string | undefined): string => {
+    if (!nameOrId) return '';
+    const trimmed = String(nameOrId).trim();
+    if (trimmed === '1' || trimmed === 'doc-1') {
+      return doctors[0]?.name || 'dr. Hendra Kurniawan, Sp.B';
+    }
+    const match = doctors.find(
+      d => d.id === trimmed || d.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (match) return match.name;
+    return trimmed;
+  };
+
+  const handleOpenLabModal = (patient: Patient) => {
+    setLabModalPatient(patient);
+    setLabModalInput(patient.labResults || '- Hb: \n- Leukosit: \n- Trombosit: \n- Hematokrit: \n- GDS: ');
+  };
+
+  const handleAddLabPresetToModal = (testName: string) => {
+    setLabModalInput(prev => {
+      const trimmed = prev.trim();
+      const bullet = `- ${testName}: `;
+      return trimmed ? `${trimmed}\n${bullet}` : bullet;
+    });
+  };
+
+  // ==========================================
   // MODAL STATE: KELOLA DOKTER DPJP & KONSULEN
   // ==========================================
   const [manageDpjpPatient, setManageDpjpPatient] = useState<Patient | null>(null);
@@ -122,9 +158,9 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
 
   const handleOpenManageDpjp = (patient: Patient) => {
     setManageDpjpPatient(patient);
-    const prim = patient.dpjp || (patient.dpjps && patient.dpjps[0]) || (doctors[0]?.name || '');
+    const prim = resolveDoctorName(patient.dpjp || (patient.dpjps && patient.dpjps[0])) || (doctors[0]?.name || '');
     setManagePrimaryDpjp(prim);
-    setManageConsultants(patient.dpjps ? patient.dpjps.filter(d => d !== prim) : []);
+    setManageConsultants(patient.dpjps ? patient.dpjps.map(resolveDoctorName).filter(d => d !== prim) : []);
     setCustomConsultantInput('');
   };
 
@@ -676,6 +712,9 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
                     <th className="py-3 px-2 w-16 text-center border-r border-amber-200">
                       HARI
                     </th>
+                    <th className="py-3 px-3 min-w-[210px] border-r border-amber-200">
+                      HASIL LAB &amp; PENUNJANG
+                    </th>
                     <th className="py-3 px-3.5 min-w-[280px] border-r border-amber-200">
                       KONDISI PASIEN / RENCANA TINDAKAN / PERMASALAHAN
                     </th>
@@ -699,6 +738,7 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
                     const temp = latestVital ? latestVital.temperature : patient.temperature;
                     const spo2 = latestVital ? latestVital.spo2 : patient.spo2;
                     const gds = latestVital?.gds || patient.gds;
+                    const cleanPrimaryDpjp = resolveDoctorName(patient.dpjp) || resolveDoctorName(patient.dpjps?.[0]) || '-';
 
                     return (
                       <tr
@@ -744,7 +784,7 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
                         <td className="py-3 px-3 border-r border-slate-200">
                           <div className="flex items-start justify-between gap-1">
                             <div className="font-bold text-slate-900 text-xs leading-snug">
-                              {patient.dpjp || '-'}
+                              {cleanPrimaryDpjp}
                             </div>
                             {onUpdatePatientDpjp && (
                               <button
@@ -764,7 +804,8 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
                                 Konsulen / Rawat Bersama:
                               </span>
                               {patient.dpjps
-                                .filter(d => d !== patient.dpjp)
+                                .map(resolveDoctorName)
+                                .filter(d => d !== cleanPrimaryDpjp)
                                 .map((k, idx) => (
                                     <div key={idx} className="font-medium truncate text-blue-900">
                                       • {k}
@@ -802,6 +843,49 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
                             <div className="text-[9px] text-slate-400 mt-1">
                               Hari ke-{hospitalDay.dayNumber}
                             </div>
+                          </td>
+
+                          {/* 5b. HASIL LAB & PENUNJANG (POIN TERSUSUN KE BAWAH) */}
+                          <td className="py-3 px-3 border-r border-slate-200">
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className="font-black uppercase tracking-wider text-[9px] text-emerald-800 flex items-center gap-1">
+                                <FlaskConical className="w-3 h-3 text-emerald-600" />
+                                Hasil Lab:
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenLabModal(patient)}
+                                className="text-[9.5px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 cursor-pointer transition-colors shadow-2xs shrink-0"
+                                title="Catat atau Ubah Hasil Laboratorium"
+                              >
+                                <Edit2 className="w-2.5 h-2.5 text-emerald-600" />
+                                <span>{patient.labResults ? 'Ubah' : '+ Lab'}</span>
+                              </button>
+                            </div>
+
+                            {patient.labResults ? (
+                              <div className="space-y-1 bg-white p-2 rounded-xl border border-emerald-200/80 shadow-2xs">
+                                {patient.labResults
+                                  .split('\n')
+                                  .map(l => l.trim())
+                                  .filter(Boolean)
+                                  .map((line, idx) => (
+                                    <div key={idx} className="flex items-start gap-1.5 text-[11px] font-mono leading-tight text-slate-800">
+                                      <span className="text-emerald-700 font-bold shrink-0">•</span>
+                                      <span className="font-semibold text-slate-900">{line.replace(/^[-•*]\s*/, '')}</span>
+                                    </div>
+                                  ))}
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenLabModal(patient)}
+                                className="w-full text-left py-1 text-slate-400 hover:text-emerald-700 italic text-[10.5px] hover:underline flex items-center gap-1 cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3 text-slate-400" />
+                                <span>Belum ada hasil lab. Klik input...</span>
+                              </button>
+                            )}
                           </td>
 
                           {/* 6. KONDISI PASIEN / RENCANA TINDAKAN / PERMASALAHAN */}
@@ -1062,10 +1146,10 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
                         <div className="flex items-center gap-1.5 min-w-0">
                           <Stethoscope className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                           <span className="truncate">
-                            DPJP: <strong>{patient.dpjp || patient.dpjps?.join(', ') || '-'}</strong>
-                            {patient.dpjps && patient.dpjps.length > 1 && patient.dpjp && (
+                            DPJP: <strong>{resolveDoctorName(patient.dpjp) || resolveDoctorName(patient.dpjps?.[0]) || '-'}</strong>
+                            {patient.dpjps && patient.dpjps.length > 1 && (
                               <span className="text-slate-500 text-[10px] ml-1">
-                                (+Konsul: {patient.dpjps.filter(d => d !== patient.dpjp).join(', ')})
+                                (+Konsul: {patient.dpjps.map(resolveDoctorName).filter(d => d !== (resolveDoctorName(patient.dpjp) || resolveDoctorName(patient.dpjps?.[0]))).join(', ')})
                               </span>
                             )}
                           </span>
@@ -1166,6 +1250,48 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
                           >
                             <Plus className="w-3 h-3 text-slate-400" />
                             <span>Belum ada rencana tindakan. Klik untuk menambahkan instruksi...</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Hasil Laboratorium (Tersusun Poin Ke Bawah) */}
+                      <div className="text-xs p-2.5 bg-emerald-50/50 rounded-2xl border border-emerald-200/80 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                            <FlaskConical className="w-3 h-3 text-emerald-600" />
+                            Hasil Laboratorium &amp; Penunjang:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenLabModal(patient)}
+                            className="text-[10px] font-bold text-emerald-800 hover:text-emerald-950 bg-white hover:bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-2.5 h-2.5 text-emerald-600" />
+                            <span>{patient.labResults ? 'Ubah Lab' : '+ Lab'}</span>
+                          </button>
+                        </div>
+
+                        {patient.labResults ? (
+                          <div className="space-y-1 bg-white/90 p-2 rounded-xl border border-emerald-200/60 shadow-2xs">
+                            {patient.labResults
+                              .split('\n')
+                              .map(l => l.trim())
+                              .filter(Boolean)
+                              .map((line, idx) => (
+                                <div key={idx} className="flex items-start gap-1.5 text-[11px] font-mono leading-tight text-slate-800">
+                                  <span className="text-emerald-700 font-bold shrink-0">•</span>
+                                  <span className="font-semibold text-slate-900">{line.replace(/^[-•*]\s*/, '')}</span>
+                                </div>
+                              ))}
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenLabModal(patient)}
+                            className="w-full text-left py-1 text-slate-400 hover:text-emerald-700 italic text-[11px] hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3 text-slate-400" />
+                            <span>Belum ada hasil lab. Klik untuk menambahkan...</span>
                           </button>
                         )}
                       </div>
@@ -1738,6 +1864,131 @@ export const DpjpView: React.FC<DpjpViewProps> = ({
               >
                 Tutup
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL OVERLAY: CATAT / PERBARUI HASIL LABORATORIUM      */}
+      {/* ======================================================== */}
+      {labModalPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-white p-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-white font-bold shadow-2xs">
+                  <FlaskConical className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm sm:text-base leading-tight">
+                    Catat / Perbarui Hasil Laboratorium
+                  </h3>
+                  <p className="text-[11px] text-emerald-100 mt-0.5">
+                    {labModalPatient.name} ({labModalPatient.rmNumber}) · {labModalPatient.bed}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLabModalPatient(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body Form */}
+            <div className="p-4 space-y-3.5 overflow-y-auto custom-scrollbar flex-1 text-xs">
+              <div>
+                <label className="block text-xs font-black text-slate-800 mb-1">
+                  Pilih Cepat Parameter Lab:
+                </label>
+                <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 rounded-2xl border border-slate-200">
+                  {[
+                    'Hb',
+                    'Leukosit',
+                    'Trombosit',
+                    'Hematokrit',
+                    'Eritrosit',
+                    'GDS',
+                    'Ureum',
+                    'Kreatinin',
+                    'Kalium',
+                    'Natrium',
+                    'Klorida',
+                    'SGOT',
+                    'SGPT',
+                    'Albumin',
+                    'AGD',
+                  ].map(test => (
+                    <button
+                      key={test}
+                      type="button"
+                      onClick={() => handleAddLabPresetToModal(test)}
+                      className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 hover:text-emerald-900 border border-emerald-200 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                    >
+                      + {test}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-black text-slate-800">
+                    Daftar Hasil Lab (Tersusun Poin Ke Bawah)
+                  </label>
+                  <span className="text-[10px] text-slate-500">
+                    Poin (-) per baris
+                  </span>
+                </div>
+                <textarea
+                  rows={8}
+                  value={labModalInput}
+                  onChange={e => setLabModalInput(e.target.value)}
+                  placeholder={"Contoh:\n- Hb: 12.5 g/dL\n- Leukosit: 8.500 /uL\n- Trombosit: 240.000 /uL\n- Hematokrit: 37%\n- GDS: 110 mg/dL\n- Ureum: 24 mg/dL\n- Kreatinin: 0.9 mg/dL\n- Kalium: 3.9 mmol/L\n- Natrium: 139 mmol/L"}
+                  className="w-full p-3 rounded-2xl border border-slate-300 bg-white font-mono text-xs leading-relaxed font-medium text-slate-900 focus:outline-none focus:border-emerald-500 shadow-inner"
+                />
+              </div>
+
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 space-y-0.5">
+                <span className="font-bold block">💡 Info Format Poin Rapi:</span>
+                <p>
+                  Setiap baris hasil pemeriksaan lab akan otomatis tersusun dengan poin (-) ke bawah agar mempermudah perawat dan dokter DPJP dalam ronde medis dan lembar aplusan.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setLabModalPatient(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onUpdatePatientLabResults && labModalPatient) {
+                      const formatted = labModalInput
+                        .split('\n')
+                        .map(l => l.trim())
+                        .filter(Boolean)
+                        .map(l => (l.startsWith('-') || l.startsWith('•') || l.startsWith('*') ? l : `- ${l}`))
+                        .join('\n');
+                      onUpdatePatientLabResults(labModalPatient.id, formatted);
+                    }
+                    setLabModalPatient(null);
+                  }}
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Simpan Hasil Lab</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

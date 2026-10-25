@@ -43,6 +43,7 @@ import {
 import {
   Patient,
   VitalSign,
+  GdsRecord,
   NursingAction,
   SBARHandover,
   SOAPNote,
@@ -63,6 +64,7 @@ export default function App() {
   const [nurses, setNurses] = useState<Nurse[]>([]);
   const [wards, setWards] = useState<Ward[]>([]);
   const [vitals, setVitals] = useState<VitalSign[]>([]);
+  const [gdsRecords, setGdsRecords] = useState<GdsRecord[]>([]);
   const [medications, setMedications] = useState<PatientMedication[]>([]);
   const [actions, setActions] = useState<NursingAction[]>([]);
   const [handovers, setHandovers] = useState<SBARHandover[]>([]);
@@ -151,6 +153,7 @@ export default function App() {
     setNurses(storage.getNurses());
     setWards(storage.getWards());
     setVitals(storage.getVitals());
+    setGdsRecords(storage.getGdsRecords());
     setMedications(storage.getMedications());
     setActions(storage.getActions());
     setHandovers(storage.getHandovers());
@@ -358,6 +361,24 @@ export default function App() {
     showToast(`Dokter DPJP pasien berhasil diperbarui.`);
   };
 
+  const handleUpdatePatientLabResults = (patientId: string, labResults: string) => {
+    const updatedPatients = patients.map(p => {
+      if (p.id !== patientId) return p;
+      return {
+        ...p,
+        labResults,
+      };
+    });
+    setPatients(updatedPatients);
+    storage.savePatients(updatedPatients);
+
+    if (detailPatient && detailPatient.id === patientId) {
+      setDetailPatient(prev => (prev ? { ...prev, labResults } : null));
+    }
+    const pt = patients.find(p => p.id === patientId);
+    showToast(`Hasil laboratorium untuk ${pt?.name || 'pasien'} berhasil disimpan.`);
+  };
+
   const handleConfirmDeletePatient = () => {
     if (!patientToDelete) return;
     const ptId = patientToDelete.id;
@@ -543,10 +564,11 @@ export default function App() {
     patientId: string,
     gdsValue: number,
     timestamp: string,
-    notes?: string
+    conditionOrNotes?: string
   ) => {
     const pt = patients.find(p => p.id === patientId);
-    // 1. Update patient record
+
+    // 1. Update patient's current GDS value
     const updatedPatients = patients.map(p =>
       p.id === patientId ? { ...p, gds: gdsValue } : p
     );
@@ -557,28 +579,43 @@ export default function App() {
       setDetailPatient(prev => (prev ? { ...prev, gds: gdsValue } : null));
     }
 
-    // 2. Also record in vitals history
-    const newVital: VitalSign = {
-      id: `v-${Date.now()}`,
+    // 2. Save to dedicated GdsRecord (Rekapan Khusus GDS - Terpisah dari TTV)
+    storage.addGdsRecord({
       patientId,
       timestamp,
-      bpSystolic: pt?.bpSystolic || 120,
-      bpDiastolic: pt?.bpDiastolic || 80,
-      heartRate: pt?.heartRate || 80,
-      respiratoryRate: pt?.respiratoryRate || 20,
-      temperature: pt?.temperature || 36.5,
-      spo2: pt?.spo2 || 98,
       gds: gdsValue,
-      notes: notes || 'Pemeriksaan GDS Khusus',
+      condition: conditionOrNotes || 'GDS Sewaktu',
       nurseName: userSession.nurseName,
-    };
-    const updatedVitals = [newVital, ...vitals];
-    setVitals(updatedVitals);
-    storage.saveVitals(updatedVitals);
+      notes: conditionOrNotes || undefined,
+    });
+    setGdsRecords(storage.getGdsRecords());
 
-    showToast(`GDS ${gdsValue} mg/dL untuk pasien ${pt?.name || ''} berhasil disimpan.`);
+    showToast(`GDS ${gdsValue} mg/dL untuk pasien ${pt?.name || ''} berhasil dicatat.`);
     setIsGdsModalOpen(false);
     setGdsModalPatient(null);
+  };
+
+  const handleDeleteGdsRecord = (recordId: string, patientId: string) => {
+    storage.deleteGdsRecord(recordId);
+    const updatedRecords = storage.getGdsRecords();
+    setGdsRecords(updatedRecords);
+
+    // Refresh patient's latest GDS if needed
+    const remainingForPt = updatedRecords
+      .filter(r => r.patientId === patientId)
+      .sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1));
+    const latestGds = remainingForPt[0]?.gds;
+
+    const updatedPatients = patients.map(p =>
+      p.id === patientId ? { ...p, gds: latestGds } : p
+    );
+    setPatients(updatedPatients);
+    storage.savePatients(updatedPatients);
+
+    if (detailPatient && detailPatient.id === patientId) {
+      setDetailPatient(prev => (prev ? { ...prev, gds: latestGds } : null));
+    }
+    showToast('Catatan hasil GDS berhasil dihapus.');
   };
 
   const handleDeleteVital = (vitalId: string, patientId: string) => {

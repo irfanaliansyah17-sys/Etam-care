@@ -24,6 +24,8 @@ import {
   Save,
   Check,
   ClipboardList,
+  Droplet,
+  FlaskConical,
 } from 'lucide-react';
 import {
   Patient,
@@ -34,6 +36,7 @@ import {
   PatientMedication,
   ShiftType,
   DoctorDPJP,
+  GdsRecord,
   calculateHospitalDay,
 } from '../types';
 import { StatusChangeType } from './PatientStatusModal';
@@ -46,6 +49,7 @@ interface PatientDetailModalProps {
   actions: NursingAction[];
   soaps: SOAPNote[];
   handovers: SBARHandover[];
+  gdsRecords?: GdsRecord[];
   isOpen: boolean;
   onClose: () => void;
   onEdit: (patient: Patient) => void;
@@ -53,11 +57,14 @@ interface PatientDetailModalProps {
   onDelete: (patient: Patient) => void;
   onUnassignNurse?: (patientId: string) => void;
   onOpenAddVital?: (patient: Patient, initialVital?: VitalSign) => void;
+  onOpenAddGds?: (patient: Patient) => void;
   onOpenAddMedication?: (patient: Patient) => void;
   onEditMedication?: (med: PatientMedication) => void;
   onDeleteMedication?: (med: PatientMedication) => void;
   onUpdatePlannedActions?: (patientId: string, plannedActions: string) => void;
   onUpdatePatientDpjp?: (patientId: string, primaryDpjp: string, dpjps: string[]) => void;
+  onUpdatePatientLabResults?: (patientId: string, labResults: string) => void;
+  onDeleteGdsRecord?: (recordId: string, patientId: string) => void;
   onOpenHandoverWithPatient: (patientId: string, prefilledVital?: VitalSign) => void;
   onSaveAction?: (actionData: Omit<NursingAction, 'id'>) => void;
   onToggleActionComplete?: (actionId: string) => void;
@@ -66,7 +73,7 @@ interface PatientDetailModalProps {
   currentShift?: ShiftType;
 }
 
-type DetailTabType = 'info' | 'ttv' | 'obat' | 'tindakan' | 'sbar';
+type DetailTabType = 'info' | 'ttv' | 'gds' | 'obat' | 'tindakan' | 'sbar';
 
 export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
   patient,
@@ -76,6 +83,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
   actions,
   soaps,
   handovers,
+  gdsRecords = [],
   isOpen,
   onClose,
   onEdit,
@@ -83,11 +91,14 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
   onDelete,
   onUnassignNurse,
   onOpenAddVital,
+  onOpenAddGds,
   onOpenAddMedication,
   onEditMedication,
   onDeleteMedication,
   onUpdatePlannedActions,
   onUpdatePatientDpjp,
+  onUpdatePatientLabResults,
+  onDeleteGdsRecord,
   onOpenHandoverWithPatient,
   onSaveAction,
   onToggleActionComplete,
@@ -111,28 +122,48 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
   const [isEditingPlannedAction, setIsEditingPlannedAction] = useState(false);
   const [plannedActionInput, setPlannedActionInput] = useState(patient?.plannedActions || '');
 
+  // Lab Results Editing State
+  const [isEditingLab, setIsEditingLab] = useState(false);
+  const [labInput, setLabInput] = useState(patient?.labResults || '');
+
+  // Helper to resolve doctor name from ID or name (prevents numeric bug like "1")
+  const resolveDoctorName = (nameOrId: string | undefined): string => {
+    if (!nameOrId) return '';
+    const trimmed = String(nameOrId).trim();
+    if (trimmed === '1' || trimmed === 'doc-1') {
+      return doctors[0]?.name || 'dr. Hendra Kurniawan, Sp.B';
+    }
+    const match = doctors.find(
+      d => d.id === trimmed || d.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (match) return match.name;
+    return trimmed;
+  };
+
   // DPJP & Konsulen Management State (Seamless within Patient Detail)
   const [isEditingDpjp, setIsEditingDpjp] = useState(false);
   const [selectedPrimaryDpjp, setSelectedPrimaryDpjp] = useState(
-    patient?.dpjp || (patient?.dpjps && patient?.dpjps[0]) || ''
+    resolveDoctorName(patient?.dpjp || (patient?.dpjps && patient?.dpjps[0])) || (doctors[0]?.name || '')
   );
   const [selectedConsultants, setSelectedConsultants] = useState<string[]>(
-    patient?.dpjps ? patient.dpjps.filter(d => d !== (patient.dpjp || patient.dpjps[0])) : []
+    patient?.dpjps ? patient.dpjps.map(resolveDoctorName).filter(d => d !== resolveDoctorName(patient.dpjp || patient.dpjps[0])) : []
   );
   const [customDoctorInput, setCustomDoctorInput] = useState('');
 
   React.useEffect(() => {
     if (patient) {
       setPlannedActionInput(patient.plannedActions || '');
+      setLabInput(patient.labResults || '');
       setIsEditingPlannedAction(false);
-      const prim = patient.dpjp || (patient.dpjps && patient.dpjps[0]) || '';
+      setIsEditingLab(false);
+      const prim = resolveDoctorName(patient.dpjp || (patient.dpjps && patient.dpjps[0])) || (doctors[0]?.name || '');
       setSelectedPrimaryDpjp(prim);
       setSelectedConsultants(
-        patient.dpjps ? patient.dpjps.filter(d => d !== prim) : []
+        patient.dpjps ? patient.dpjps.map(resolveDoctorName).filter(d => d !== prim) : []
       );
       setIsEditingDpjp(false);
     }
-  }, [patient?.id, patient?.plannedActions, patient?.dpjp, patient?.dpjps]);
+  }, [patient?.id, patient?.plannedActions, patient?.labResults, patient?.dpjp, patient?.dpjps, doctors]);
 
   const handleSaveDpjpLocal = (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,12 +237,18 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
 
   const hospitalDayInfo = calculateHospitalDay(patient.admissionDate);
 
-  const doctorList =
+  const patientGdsList = (gdsRecords || [])
+    .filter(r => r.patientId === patient.id)
+    .sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1));
+
+  const cleanDpjp = resolveDoctorName(patient.dpjp);
+  const doctorList = (
     patient.dpjps && patient.dpjps.length > 0
-      ? patient.dpjps
-      : patient.dpjp
-      ? [patient.dpjp]
-      : [];
+      ? patient.dpjps.map(resolveDoctorName)
+      : cleanDpjp
+      ? [cleanDpjp]
+      : []
+  ).filter(Boolean);
 
   const tabList = [
     {
@@ -225,6 +262,12 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
       label: 'Riwayat TTV',
       icon: HeartPulse,
       count: patientVitals.length,
+    },
+    {
+      id: 'gds' as DetailTabType,
+      label: 'Rekapan GDS',
+      icon: Droplet,
+      count: patientGdsList.length,
     },
     {
       id: 'obat' as DetailTabType,
@@ -617,15 +660,15 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                     </div>
                     <div className="space-y-1">
                       <p className="text-slate-900 font-bold text-xs sm:text-sm">
-                        {patient.dpjp || (doctorList[0] || 'Belum Ditetapkan')}
+                        {cleanDpjp || (doctorList[0] || 'Belum Ditetapkan')}
                       </p>
-                      {doctorList.filter(d => d !== patient.dpjp).length > 0 && (
+                      {doctorList.filter(d => d !== cleanDpjp).length > 0 && (
                         <div className="text-[11px] text-slate-600 bg-white p-1.5 rounded-lg border border-slate-200/80">
                           <span className="font-bold text-slate-500 uppercase text-[9px] block">
                             Konsulen / Rawat Bersama:
                           </span>
                           {doctorList
-                            .filter(d => d !== patient.dpjp)
+                            .filter(d => d !== cleanDpjp)
                             .map((k, idx) => (
                               <div key={idx} className="font-medium text-blue-900 truncate">
                                 • {k}
@@ -835,6 +878,62 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                 )}
               </div>
 
+              {/* Hasil Laboratorium & Penunjang Medis (Poin Rapi Tersusun Ke Bawah) */}
+              <div className="bg-emerald-50/70 p-3 sm:p-3.5 rounded-2xl border border-emerald-200 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-950 text-xs flex items-center gap-1.5 uppercase tracking-wider">
+                    <FlaskConical className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Hasil Laboratorium &amp; Penunjang</span>
+                  </span>
+                  {onUpdatePatientLabResults && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLabInput(patient.labResults || '');
+                        setIsEditingLab(true);
+                      }}
+                      className="text-xs font-bold text-emerald-800 hover:text-emerald-950 bg-white hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                      <span>{patient.labResults ? 'Ubah Hasil Lab' : '+ Catat Hasil Lab'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {patient.labResults ? (
+                  <div className="bg-white/95 p-3 rounded-xl border border-emerald-200/80 space-y-1 shadow-2xs">
+                    {patient.labResults
+                      .split('\n')
+                      .map(line => line.trim())
+                      .filter(Boolean)
+                      .map((line, idx) => (
+                        <div key={idx} className="flex items-start gap-2 text-xs font-mono text-slate-800 leading-relaxed">
+                          <span className="text-emerald-700 font-bold shrink-0">•</span>
+                          <span className="font-semibold text-slate-900">
+                            {line.replace(/^[-•*]\s*/, '')}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-slate-400 italic text-xs py-1">
+                    Belum ada hasil laboratorium tercatat untuk pasien ini.{' '}
+                    {onUpdatePatientLabResults && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLabInput('- Hb: \n- Leukosit: \n- Trombosit: \n- Hematokrit: \n- GDS: ');
+                          setIsEditingLab(true);
+                        }}
+                        className="text-emerald-700 font-bold underline ml-1 cursor-pointer not-italic"
+                      >
+                        + Catat hasil lab sekarang
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Alergi & Catatan */}
               <div className="bg-rose-50/70 p-2.5 sm:p-3 rounded-xl border border-rose-200 text-rose-900">
                 <span className="font-bold block mb-0.5 flex items-center gap-1 text-rose-800 text-xs">
@@ -863,17 +962,6 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                   <p className="text-[11px] text-slate-500">Tanda-tanda vital termonitor berkala</p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  {patientVitals.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenHandoverWithPatient(patient.id, latestVital)}
-                      className="min-h-[34px] px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer"
-                      title="Bawa TTV terbaru pasien langsung ke lembar Timbang Terima SBAR"
-                    >
-                      <ArrowDownToLine className="w-3.5 h-3.5" />
-                      <span>Tarik ke SBAR</span>
-                    </button>
-                  )}
                   {onOpenAddVital && (
                     <button
                       onClick={() => onOpenAddVital(patient)}
@@ -1012,20 +1100,6 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 self-start sm:self-center shrink-0">
-                  {patientMeds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onOpenHandoverWithPatient(patient.id);
-                      }}
-                      className="min-h-[36px] px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-2xs active:scale-95 transition-all cursor-pointer"
-                      title="Bawa data obat pasien ini ke lembar SBAR"
-                    >
-                      <ArrowDownToLine className="w-3.5 h-3.5" />
-                      <span>Tarik Obat ke SBAR</span>
-                    </button>
-                  )}
                   {onOpenAddMedication && (
                     <button
                       onClick={() => onOpenAddMedication(patient)}
@@ -1495,6 +1569,174 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
               )}
             </div>
           )}
+
+          {/* TAB: REKAPAN GDS (KHUSUS GULA DARAH SEWAKTU - TERPISAH DARI TTV) */}
+          {activeTab === 'gds' && (
+            <div className="space-y-3.5">
+              {/* Header & Quick Action */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-amber-50/70 p-3 sm:p-3.5 rounded-2xl border border-amber-200">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Droplet className="w-5 h-5 text-amber-600" />
+                    <h3 className="font-black text-slate-900 text-xs sm:text-sm uppercase tracking-wider">
+                      Rekapan Hasil Khusus GDS Pasien ({patientGdsList.length})
+                    </h3>
+                  </div>
+                  <p className="text-[11px] text-amber-900 mt-0.5">
+                    Data riwayat Gula Darah Sewaktu tersimpan terpisah khusus dan tidak mencemari riwayat TTV rutin.
+                  </p>
+                </div>
+
+                {onOpenAddGds && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenAddGds(patient)}
+                    className="min-h-[36px] px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Catat GDS Pasien</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Metric Overview Cards */}
+              {patientGdsList.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">GDS Terakhir</span>
+                    <strong className="text-amber-800 text-base sm:text-lg font-black block mt-0.5">
+                      {patientGdsList[0].gds} <span className="text-[10px] text-slate-400 font-normal">mg/dL</span>
+                    </strong>
+                    <span className="text-[9px] text-slate-400 block truncate">{patientGdsList[0].timestamp}</span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">GDS Tertinggi</span>
+                    <strong className="text-rose-700 text-base sm:text-lg font-black block mt-0.5">
+                      {Math.max(...patientGdsList.map(r => r.gds))} <span className="text-[10px] text-slate-400 font-normal">mg/dL</span>
+                    </strong>
+                    <span className="text-[9px] text-slate-400 block">Puncak Terdeteksi</span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">GDS Terendah</span>
+                    <strong className="text-blue-700 text-base sm:text-lg font-black block mt-0.5">
+                      {Math.min(...patientGdsList.map(r => r.gds))} <span className="text-[10px] text-slate-400 font-normal">mg/dL</span>
+                    </strong>
+                    <span className="text-[9px] text-slate-400 block">Nilai Terendah</span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Rata-rata GDS</span>
+                    <strong className="text-slate-800 text-base sm:text-lg font-black block mt-0.5">
+                      {Math.round(patientGdsList.reduce((acc, c) => acc + c.gds, 0) / patientGdsList.length)}{' '}
+                      <span className="text-[10px] text-slate-400 font-normal">mg/dL</span>
+                    </strong>
+                    <span className="text-[9px] text-slate-400 block">Dari {patientGdsList.length} kali cek</span>
+                  </div>
+                </div>
+              )}
+
+              {/* List of GDS Records */}
+              {patientGdsList.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-xs space-y-2">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+                    <Droplet className="w-6 h-6" />
+                  </div>
+                  <p className="font-bold text-slate-700 text-sm">Belum Ada Rekapan Hasil GDS Khusus</p>
+                  <p className="text-slate-400 text-xs max-w-sm mx-auto">
+                    Setiap kali Anda mencatat GDS melalui tombol "Catat GDS", hasilnya akan otomatis terekap rapi di lembar khusus ini tanpa mencemari riwayat TTV pasien.
+                  </p>
+                  {onOpenAddGds && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenAddGds(patient)}
+                      className="mt-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Catat GDS Pasien Sekarang</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-amber-100/90 text-amber-950 border-b border-amber-200 font-black text-[11px] uppercase tracking-wider">
+                          <th className="py-2.5 px-3">WAKTU PEMERIKSAAN</th>
+                          <th className="py-2.5 px-3">HASIL GDS</th>
+                          <th className="py-2.5 px-3">INTERPRETASI KLINIS</th>
+                          <th className="py-2.5 px-3">KONDISI PENGAMBILAN</th>
+                          <th className="py-2.5 px-3">PERAWAT</th>
+                          <th className="py-2.5 px-2.5 text-center">AKSI</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {patientGdsList.map(record => {
+                          const getInterpretation = (val: number) => {
+                            if (val < 70) return { label: 'Hipoglikemia (< 70)', color: 'bg-rose-100 text-rose-800 border-rose-300' };
+                            if (val <= 140) return { label: 'Normal (70-140)', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
+                            if (val < 200) return { label: 'Meningkat (141-199)', color: 'bg-amber-100 text-amber-900 border-amber-300' };
+                            return { label: 'Hiperglikemia (≥ 200)', color: 'bg-rose-100 text-rose-800 border-rose-300' };
+                          };
+                          const interp = getInterpretation(record.gds);
+
+                          return (
+                            <tr key={record.id} className="hover:bg-amber-50/30 transition-colors">
+                              <td className="py-2.5 px-3 font-medium text-slate-700 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{record.timestamp}</span>
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <span className="text-sm font-black text-slate-900 bg-amber-50/80 border border-amber-200 px-2 py-0.5 rounded-lg">
+                                  {record.gds} <span className="text-[10px] text-slate-500 font-semibold">mg/dL</span>
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${interp.color}`}>
+                                  {interp.label}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span className="text-slate-800 font-semibold text-xs">
+                                  {record.condition || 'GDS Sewaktu'}
+                                </span>
+                                {record.notes && record.notes !== record.condition && (
+                                  <div className="text-[10px] text-slate-500 italic mt-0.5">{record.notes}</div>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap font-medium text-[11px]">
+                                {record.nurseName || 'Perawat Bertugas'}
+                              </td>
+                              <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
+                                {onDeleteGdsRecord && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm(`Hapus catatan GDS ${record.gds} mg/dL pada ${record.timestamp}?`)) {
+                                        onDeleteGdsRecord(record.id, patient.id);
+                                      }
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                                    title="Hapus catatan GDS ini"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer Quick Action */}
@@ -1676,6 +1918,129 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL OVERLAY: EDIT HASIL LABORATORIUM & PENUNJANG */}
+        {isEditingLab && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-white p-4 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-white font-bold shadow-2xs">
+                    <FlaskConical className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm sm:text-base leading-tight">
+                      Pencatatan Hasil Laboratorium
+                    </h3>
+                    <p className="text-[11px] text-emerald-100 mt-0.5">
+                      {patient.name} ({patient.rmNumber}) · {patient.bed}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingLab(false)}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Form Body */}
+              <div className="p-4 space-y-3.5 overflow-y-auto custom-scrollbar flex-1 text-xs">
+                <div>
+                  <label className="block text-xs font-black text-slate-800 mb-1">
+                    Pilih Cepat Parameter Lab:
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 rounded-2xl border border-slate-200">
+                    {[
+                      'Hb',
+                      'Leukosit',
+                      'Trombosit',
+                      'Hematokrit',
+                      'Eritrosit',
+                      'GDS',
+                      'Ureum',
+                      'Kreatinin',
+                      'Kalium',
+                      'Natrium',
+                      'Klorida',
+                      'SGOT',
+                      'SGPT',
+                      'Albumin',
+                      'AGD',
+                    ].map(test => (
+                      <button
+                        key={test}
+                        type="button"
+                        onClick={() => handleAddLabPreset(test)}
+                        className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 hover:text-emerald-900 border border-emerald-200 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                      >
+                        + {test}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-black text-slate-800">
+                      Daftar Hasil Lab (Tersusun Poin Ke Bawah)
+                    </label>
+                    <span className="text-[10px] text-slate-500">
+                      Tersusun poin (-) per baris
+                    </span>
+                  </div>
+                  <textarea
+                    rows={8}
+                    value={labInput}
+                    onChange={e => setLabInput(e.target.value)}
+                    placeholder={"Contoh:\n- Hb: 12.5 g/dL\n- Leukosit: 8.500 /uL\n- Trombosit: 240.000 /uL\n- Hematokrit: 37%\n- GDS: 110 mg/dL\n- Ureum: 24 mg/dL\n- Kreatinin: 0.9 mg/dL\n- Kalium: 3.9 mmol/L\n- Natrium: 139 mmol/L"}
+                    className="w-full p-3 rounded-2xl border border-slate-300 bg-white font-mono text-xs leading-relaxed font-medium text-slate-900 focus:outline-none focus:border-emerald-500 shadow-inner"
+                  />
+                </div>
+
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 space-y-0.5">
+                  <span className="font-bold block">💡 Format Poin Tersusun Rapi:</span>
+                  <p>
+                    Setiap baris hasil pemeriksaan lab akan otomatis tersusun dengan poin (-) ke bawah agar mempermudah perawat dan dokter DPJP dalam ronde medis.
+                  </p>
+                </div>
+
+                {/* Submit Buttons */}
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingLab(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onUpdatePatientLabResults) {
+                        const formatted = labInput
+                          .split('\n')
+                          .map(l => l.trim())
+                          .filter(Boolean)
+                          .map(l => (l.startsWith('-') || l.startsWith('•') || l.startsWith('*') ? l : `- ${l}`))
+                          .join('\n');
+                        onUpdatePatientLabResults(patient.id, formatted);
+                      }
+                      setIsEditingLab(false);
+                    }}
+                    className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Simpan Hasil Lab</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

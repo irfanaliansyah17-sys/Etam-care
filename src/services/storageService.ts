@@ -1,6 +1,7 @@
 import {
   Patient,
   VitalSign,
+  GdsRecord,
   NursingAction,
   SBARHandover,
   SOAPNote,
@@ -21,6 +22,7 @@ const STORAGE_KEYS = {
   NURSES: 'etamcare_nurses',
   WARDS: 'etamcare_wards',
   VITALS: 'etamcare_vitals',
+  GDS_RECORDS: 'etamcare_gds_records',
   MEDICATIONS: 'etamcare_medications',
   ACTIONS: 'etamcare_actions',
   HANDOVERS: 'etamcare_handovers',
@@ -160,14 +162,45 @@ export const INITIAL_NURSES: Nurse[] = [
     isActive: true,
     isOnDuty: false,
   },
+];
+
+// Initial GDS Records (Rekapan Khusus GDS)
+export const INITIAL_GDS_RECORDS: GdsRecord[] = [
   {
-    id: 'nurse-5',
-    name: 'Ns. Hj. Mariana, S.Kep., M.Kep',
-    role: 'Kepala Ruangan (Karu)',
-    currentShift: 'Pagi (07.00 - 14.00)',
-    ward: 'Ruang Teratai',
-    isActive: true,
-    isOnDuty: true,
+    id: 'gds-1',
+    patientId: 'p-1',
+    timestamp: '2026-10-01 06:30',
+    gds: 118,
+    condition: 'GDP (Puasa)',
+    nurseName: 'Ns. Ratna Dewi, S.Kep',
+    notes: 'Kadar optimal puasa persiapan visit DPJP.',
+  },
+  {
+    id: 'gds-2',
+    patientId: 'p-2',
+    timestamp: '2026-10-01 07:00',
+    gds: 104,
+    condition: 'GDS Sewaktu',
+    nurseName: 'Ns. Ratna Dewi, S.Kep',
+    notes: 'GDS normal fase pemeliharaan cairan.',
+  },
+  {
+    id: 'gds-3',
+    patientId: 'p-3',
+    timestamp: '2026-10-01 06:15',
+    gds: 245,
+    condition: 'GDP (Puasa)',
+    nurseName: 'Ns. Ratna Dewi, S.Kep',
+    notes: 'Tinggi. DPJP instruksi sliding scale insulin 8 IU.',
+  },
+  {
+    id: 'gds-4',
+    patientId: 'p-3',
+    timestamp: '2026-10-01 12:30',
+    gds: 180,
+    condition: 'GDS 2 Jam PP',
+    nurseName: 'Ns. Budi Santoso, S.Kep',
+    notes: 'Mulai menurun paska injeksi insulin.',
   },
 ];
 
@@ -202,6 +235,7 @@ export const INITIAL_PATIENTS: Patient[] = [
     gds: 118,
     allergies: 'Penisilin',
     notes: 'Drain luka rembesan minimal serohemoragis 30cc. NGT terpasang.',
+    labResults: '- Hb: 11.2 g/dL\n- Leukosit: 14.200 /uL\n- Trombosit: 240.000 /uL\n- Hematokrit: 34%\n- GDS: 118 mg/dL\n- Elektrolit: Na 136, K 3.8, Cl 101',
   },
   {
     id: 'p-2',
@@ -232,6 +266,7 @@ export const INITIAL_PATIENTS: Patient[] = [
     gds: 104,
     allergies: 'Tidak ada',
     notes: 'Awasi presyok (akral dingin, tensi turun, nadi filiformis).',
+    labResults: '- Hb: 13.5 g/dL\n- Leukosit: 3.100 /uL\n- Trombosit: 45.000 /uL\n- Hematokrit: 44%\n- GDS: 104 mg/dL\n- Serologi Dengue: IgM (+), IgG (+)',
   },
   {
     id: 'p-3',
@@ -890,6 +925,11 @@ export function applyIncomingData(key: string, data: any): boolean {
       setLocalTimestamp('vitals');
       return true;
     }
+    if (key === 'gdsRecords' && Array.isArray(data)) {
+      localStorage.setItem(STORAGE_KEYS.GDS_RECORDS, JSON.stringify(data));
+      setLocalTimestamp('gdsRecords');
+      return true;
+    }
     if (key === 'medications' && Array.isArray(data)) {
       localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(data));
       setLocalTimestamp('medications');
@@ -1156,6 +1196,15 @@ export const storage = {
         keysToHealServer['vitals'] = storage.getVitals();
       }
     }
+    // GDS Records
+    if (Array.isArray(data.gdsRecords)) {
+      if (shouldAcceptServer('gdsRecords', data.gdsRecords)) {
+        localStorage.setItem(STORAGE_KEYS.GDS_RECORDS, JSON.stringify(data.gdsRecords));
+        hasUpdated = true;
+      } else {
+        keysToHealServer['gdsRecords'] = storage.getGdsRecords();
+      }
+    }
     // Medications
     if (Array.isArray(data.medications)) {
       if (shouldAcceptServer('medications', data.medications)) {
@@ -1226,6 +1275,7 @@ export const storage = {
         nurses: storage.getNurses(),
         wards: storage.getWards(),
         vitals: storage.getVitals(),
+        gdsRecords: storage.getGdsRecords(),
         medications: storage.getMedications(),
         actions: storage.getActions(),
         handovers: storage.getHandovers(),
@@ -1275,16 +1325,42 @@ export const storage = {
     try {
       const parsed: Patient[] = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
-      return parsed.map((p) => ({
-        ...p,
-        nurseInCharge: p.nurseInCharge ? p.nurseInCharge.trim() : undefined,
-        lifeStatus: p.lifeStatus || 'aktif',
-        dpjps: p.dpjps && p.dpjps.length > 0 ? p.dpjps : p.dpjp ? [p.dpjp] : [],
-        birthDate: p.birthDate || '1975-01-01',
-        age: p.birthDate ? calculateAge(p.birthDate) : p.age || 45,
-        plannedActions: p.plannedActions || 'Observasi TTV dan pemberian terapi rutin.',
-        admissionTime: p.admissionTime || '08:00',
-      }));
+      const doctorsList = storage.getDoctors();
+      const firstDocName = doctorsList[0]?.name || INITIAL_DOCTORS[0]?.name || 'dr. DPJP';
+
+      return parsed.map((p) => {
+        // Resolve DPJP if stored as ID '1' or 'doc-1'
+        const rawDpjps = p.dpjps && p.dpjps.length > 0 ? p.dpjps : p.dpjp ? [p.dpjp] : [];
+        const sanitizedDpjps = rawDpjps
+          .map(d => {
+            const s = String(d || '').trim();
+            if (s === '1' || s === 'doc-1') return firstDocName;
+            const doc = doctorsList.find(docItem => docItem.id === s);
+            return doc ? doc.name : s;
+          })
+          .filter(d => Boolean(d) && d !== '1' && d !== 'doc-1');
+
+        let resolvedPrimary = String(p.dpjp || '').trim();
+        if (resolvedPrimary === '1' || resolvedPrimary === 'doc-1' || !resolvedPrimary) {
+          resolvedPrimary = sanitizedDpjps[0] || firstDocName;
+        } else {
+          const doc = doctorsList.find(docItem => docItem.id === resolvedPrimary);
+          if (doc) resolvedPrimary = doc.name;
+        }
+
+        return {
+          ...p,
+          dpjp: resolvedPrimary,
+          dpjps: sanitizedDpjps.length > 0 ? sanitizedDpjps : [resolvedPrimary],
+          labResults: p.labResults !== undefined ? p.labResults : '',
+          nurseInCharge: p.nurseInCharge ? p.nurseInCharge.trim() : undefined,
+          lifeStatus: p.lifeStatus || 'aktif',
+          birthDate: p.birthDate || '1975-01-01',
+          age: p.birthDate ? calculateAge(p.birthDate) : p.age || 45,
+          plannedActions: p.plannedActions || 'Observasi TTV dan pemberian terapi rutin.',
+          admissionTime: p.admissionTime || '08:00',
+        };
+      });
     } catch {
       return [];
     }
@@ -1341,31 +1417,35 @@ export const storage = {
       if (!Array.isArray(parsed)) {
         return [];
       }
-      return parsed.map(n => ({
-        ...n,
-        id: n.id || `nurse-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        name: (n.name || '').trim(),
-        role: n.role || 'Perawat Pelaksana',
-        currentShift: n.currentShift || 'Pagi (07.00 - 14.00)',
-        ward: n.ward || 'Ruang Teratai',
-        isActive: n.isActive !== undefined ? Boolean(n.isActive) : true,
-        isOnDuty: n.isOnDuty !== undefined ? Boolean(n.isOnDuty) : false,
-      }));
+      return parsed
+        .filter(n => !(n.name || '').toLowerCase().includes('mariana'))
+        .map(n => ({
+          ...n,
+          id: n.id || `nurse-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          name: (n.name || '').trim(),
+          role: n.role || 'Perawat Pelaksana',
+          currentShift: n.currentShift || 'Pagi (07.00 - 14.00)',
+          ward: n.ward || 'Ruang Teratai',
+          isActive: n.isActive !== undefined ? Boolean(n.isActive) : true,
+          isOnDuty: n.isOnDuty !== undefined ? Boolean(n.isOnDuty) : false,
+        }));
     } catch {
       return [];
     }
   },
 
   saveNurses(nurses: Nurse[], pushToApi = true): void {
-    const sanitized = nurses.map(n => ({
-      ...n,
-      name: (n.name || '').trim(),
-      role: n.role || 'Perawat Pelaksana',
-      currentShift: n.currentShift || 'Pagi (07.00 - 14.00)',
-      ward: n.ward || 'Ruang Teratai',
-      isActive: n.isActive !== undefined ? Boolean(n.isActive) : true,
-      isOnDuty: Boolean(n.isOnDuty),
-    }));
+    const sanitized = nurses
+      .filter(n => !(n.name || '').toLowerCase().includes('mariana'))
+      .map(n => ({
+        ...n,
+        name: (n.name || '').trim(),
+        role: n.role || 'Perawat Pelaksana',
+        currentShift: n.currentShift || 'Pagi (07.00 - 14.00)',
+        ward: n.ward || 'Ruang Teratai',
+        isActive: n.isActive !== undefined ? Boolean(n.isActive) : true,
+        isOnDuty: Boolean(n.isOnDuty),
+      }));
     localStorage.setItem(STORAGE_KEYS.NURSES, JSON.stringify(sanitized));
     localStorage.setItem(STORAGE_KEYS.NURSES_INITIALIZED, 'true');
     localStorage.setItem(STORAGE_KEYS.NURSES_CUSTOMIZED, 'true');
@@ -1460,6 +1540,46 @@ export const storage = {
     vitals.unshift(newVital);
     storage.saveVitals(vitals);
     return newVital;
+  },
+
+  // GDS Records (Khusus & Terpisah dari TTV)
+  getGdsRecords(): GdsRecord[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.GDS_RECORDS);
+    if (raw === null) {
+      localStorage.setItem(STORAGE_KEYS.GDS_RECORDS, JSON.stringify(INITIAL_GDS_RECORDS));
+      return INITIAL_GDS_RECORDS;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveGdsRecords(records: GdsRecord[], pushToApi = true): void {
+    localStorage.setItem(STORAGE_KEYS.GDS_RECORDS, JSON.stringify(records));
+    setLocalTimestamp('gdsRecords');
+    if (pushToApi) {
+      sendRealtimeUpdate('gdsRecords', records);
+    }
+  },
+
+  addGdsRecord(recordData: Omit<GdsRecord, 'id'>): GdsRecord {
+    const records = storage.getGdsRecords();
+    const newRecord: GdsRecord = {
+      ...recordData,
+      id: `gds-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    };
+    const updated = [newRecord, ...records];
+    storage.saveGdsRecords(updated);
+    return newRecord;
+  },
+
+  deleteGdsRecord(recordId: string): void {
+    const records = storage.getGdsRecords();
+    const updated = records.filter(r => r.id !== recordId);
+    storage.saveGdsRecords(updated);
   },
 
   // Medications

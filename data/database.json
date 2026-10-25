@@ -278,15 +278,6 @@
       "ward": "Ruang Teratai",
       "isActive": true,
       "isOnDuty": false
-    },
-    {
-      "id": "nurse-5",
-      "name": "Ns. Hj. Mariana, S.Kep., M.Kep",
-      "role": "Kepala Ruangan (Karu)",
-      "currentShift": "Pagi (07.00 - 14.00)",
-      "ward": "Ruang Teratai",
-      "isActive": true,
-      "isOnDuty": true
     }
   ],
   "wards": [

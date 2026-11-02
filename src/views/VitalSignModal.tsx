@@ -595,9 +595,6 @@ export const VitalSignModal: React.FC<VitalSignModalProps> = ({
                             Terbaru
                           </span>
                         )}
-                        <span className="text-[10px] text-slate-500">
-                          · {vital.nurseName}
-                        </span>
                       </div>
 
                       <div className="flex items-center gap-1">
@@ -657,14 +654,9 @@ export const VitalSignModal: React.FC<VitalSignModalProps> = ({
                       </div>
                     </div>
 
-                    {/* GDS / Keluhan */}
-                    {(vital.gds !== undefined || vital.complaint || vital.notes) && (
+                    {/* Keluhan & Catatan TTV */}
+                    {(vital.complaint || vital.notes) && (
                       <div className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100 space-y-0.5">
-                        {vital.gds !== undefined && (
-                          <div>
-                            <strong className="text-amber-800">GDS:</strong> {vital.gds} mg/dL
-                          </div>
-                        )}
                         {vital.complaint && (
                           <div>
                             <strong className="text-slate-700">Keluhan:</strong> {vital.complaint}

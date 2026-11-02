@@ -1064,7 +1064,6 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                           )}
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span>Oleh: <strong className="text-slate-800 font-bold">{v.nurseName}</strong></span>
                           {onOpenAddVital && (
                             <button
                               type="button"
@@ -1088,8 +1087,8 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Vital Data Grid - 6 Metrik Rapi & Proporsional */}
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-2 text-center">
+                      {/* Vital Data Grid - 5 Metrik Utama Sederhana */}
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 sm:gap-2 text-center">
                         <div className="bg-slate-50/70 p-2 rounded-xl border border-slate-200/80 shadow-2xs">
                           <span className="text-[10px] sm:text-[11px] text-slate-500 block font-bold">TD</span>
                           <strong className="text-slate-900 text-xs sm:text-sm font-black">{v.bpSystolic}/{v.bpDiastolic}</strong>
@@ -1114,13 +1113,6 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                           <span className="text-[10px] sm:text-[11px] text-slate-500 block font-bold">SpO₂</span>
                           <strong className="text-blue-700 text-xs sm:text-sm font-black">{v.spo2}%</strong>
                           <span className="text-[9px] text-blue-500 block font-semibold mt-0.5">Oksigen</span>
-                        </div>
-                        <div className={`p-2 rounded-xl border shadow-2xs ${
-                          v.gds !== undefined ? 'bg-amber-50/70 border-amber-200' : 'bg-slate-50/50 border-slate-200'
-                        }`}>
-                          <span className="text-[10px] sm:text-[11px] text-amber-900 block font-bold">GDS</span>
-                          <strong className="text-amber-900 text-xs sm:text-sm font-black">{v.gds !== undefined ? v.gds : '-'}</strong>
-                          <span className="text-[9px] text-amber-700 block font-semibold mt-0.5">mg/dL</span>
                         </div>
                       </div>
 
@@ -1175,58 +1167,6 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                   )}
                 </div>
               </div>
-
-              {/* Quick Summary Cards (Analisis Gula Darah) */}
-              {combinedSugarRecords.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                  {/* Terakhir */}
-                  <div className="bg-white p-3 rounded-2xl border border-amber-200 shadow-2xs">
-                    <span className="text-[10.5px] font-bold text-slate-500 block">Kadar Terkini</span>
-                    <div className="text-xl font-black text-amber-950 mt-0.5">
-                      {combinedSugarRecords[0].gds}{' '}
-                      <span className="text-[10px] font-semibold text-slate-400">mg/dL</span>
-                    </div>
-                    <span className="text-[10px] font-bold text-amber-800 line-clamp-1 mt-0.5">
-                      {combinedSugarRecords[0].sugarType}
-                    </span>
-                  </div>
-
-                  {/* Rata-rata */}
-                  <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
-                    <span className="text-[10.5px] font-bold text-slate-500 block">Rata-rata</span>
-                    <div className="text-xl font-black text-slate-900 mt-0.5">
-                      {Math.round(
-                        combinedSugarRecords.reduce((acc, curr) => acc + curr.gds, 0) /
-                          combinedSugarRecords.length
-                      )}{' '}
-                      <span className="text-[10px] font-semibold text-slate-400">mg/dL</span>
-                    </div>
-                    <span className="text-[10px] text-slate-400 mt-0.5 block">
-                      Dari {combinedSugarRecords.length} kali cek
-                    </span>
-                  </div>
-
-                  {/* Tertinggi */}
-                  <div className="bg-white p-3 rounded-2xl border border-rose-100 shadow-2xs">
-                    <span className="text-[10.5px] font-bold text-rose-700 block">Tertinggi (Max)</span>
-                    <div className="text-xl font-black text-rose-600 mt-0.5">
-                      {Math.max(...combinedSugarRecords.map(r => r.gds))}{' '}
-                      <span className="text-[10px] font-semibold text-rose-400">mg/dL</span>
-                    </div>
-                    <span className="text-[10px] text-rose-600/70 mt-0.5 block">Puncak hiperglikemia</span>
-                  </div>
-
-                  {/* Terendah */}
-                  <div className="bg-white p-3 rounded-2xl border border-emerald-100 shadow-2xs">
-                    <span className="text-[10.5px] font-bold text-emerald-700 block">Terendah (Min)</span>
-                    <div className="text-xl font-black text-emerald-600 mt-0.5">
-                      {Math.min(...combinedSugarRecords.map(r => r.gds))}{' '}
-                      <span className="text-[10px] font-semibold text-emerald-400">mg/dL</span>
-                    </div>
-                    <span className="text-[10px] text-emerald-600/70 mt-0.5 block">Batas nadir terkontrol</span>
-                  </div>
-                </div>
-              )}
 
               {/* Daftar Riwayat Pengukuran Gula Darah */}
               {combinedSugarRecords.length === 0 ? (
@@ -1341,10 +1281,6 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px]">
-                              Oleh: <strong className="text-slate-800 font-bold">{r.nurseName}</strong>
-                            </span>
-
                             {onDeleteGdsRecord && !r.isFromVital && (
                               <button
                                 type="button"

@@ -27,6 +27,7 @@ import {
   SBARHandover,
   NursingAction,
   VitalSign,
+  GdsRecord,
   Nurse,
   ShiftType,
   PatientCondition,
@@ -43,6 +44,7 @@ interface HandoverViewProps {
   actions: NursingAction[];
   vitals: VitalSign[];
   medications?: PatientMedication[];
+  gdsRecords?: GdsRecord[];
   userSession: UserSession;
   initialSelectedPatientId?: string;
   initialSelectedVital?: VitalSign | null;
@@ -58,6 +60,7 @@ export const HandoverView: React.FC<HandoverViewProps> = ({
   actions,
   vitals,
   medications = [],
+  gdsRecords = [],
   userSession,
   initialSelectedPatientId,
   initialSelectedVital,
@@ -201,16 +204,71 @@ export const HandoverView: React.FC<HandoverViewProps> = ({
     return uniquePending.join(', ');
   };
 
+  // Latest Sugar Record for the selected patient (covers general blood sugar)
+  const latestSugarRecord = useMemo(() => {
+    if (!selectedPatient) return null;
+    const ptSugars = (gdsRecords || [])
+      .filter(r => r.patientId === selectedPatient.id)
+      .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+
+    if (ptSugars.length > 0) {
+      return {
+        gds: ptSugars[0].gds,
+        sugarType: ptSugars[0].sugarType || ptSugars[0].condition || 'GDS (Sewaktu)',
+        timestamp: ptSugars[0].timestamp,
+      };
+    }
+
+    const vitalWithSugar = ptVitals.find(
+      v => v.gds !== undefined && v.gds !== null && !isNaN(Number(v.gds)) && Number(v.gds) > 0
+    );
+    if (vitalWithSugar) {
+      return {
+        gds: Number(vitalWithSugar.gds),
+        sugarType: (vitalWithSugar as any).sugarType || 'GDS (Sewaktu)',
+        timestamp: vitalWithSugar.timestamp,
+      };
+    }
+
+    if (
+      selectedPatient.gds !== undefined &&
+      selectedPatient.gds !== null &&
+      !isNaN(Number(selectedPatient.gds)) &&
+      Number(selectedPatient.gds) > 0
+    ) {
+      return {
+        gds: Number(selectedPatient.gds),
+        sugarType: 'GDS (Sewaktu)',
+        timestamp: 'Data Awal',
+      };
+    }
+
+    return null;
+  }, [selectedPatient, gdsRecords, ptVitals]);
+
+  const buildLatestSugarString = () => {
+    if (!latestSugarRecord) {
+      return 'Belum ada data gula darah';
+    }
+    const typePart = latestSugarRecord.sugarType || 'GDS';
+    const timePart = latestSugarRecord.timestamp ? ` [${latestSugarRecord.timestamp}]` : '';
+    return `${latestSugarRecord.gds} mg/dL (${typePart})${timePart}`;
+  };
+
   const buildVitalsSummary = (specificVital?: VitalSign) => {
     const v = specificVital || ptVitals[selectedVitalIndex] || ptVitals[0];
+    const sugarPart = latestSugarRecord
+      ? `, Gula: ${latestSugarRecord.gds} mg/dL (${latestSugarRecord.sugarType || 'GDS'})`
+      : v?.gds !== undefined && v?.gds !== null && Number(v?.gds) > 0
+      ? `, Gula: ${v.gds} mg/dL`
+      : '';
     if (v) {
       const gcsPart = v.gcs ? `, GCS: ${v.gcs}` : '';
-      const gdsPart = v.gds !== undefined ? `, GDS: ${v.gds} mg/dL` : '';
-      return `TD ${v.bpSystolic}/${v.bpDiastolic} mmHg, Nadi ${v.heartRate}x/m, RR ${v.respiratoryRate}x/m, Suhu ${v.temperature}°C, SpO₂ ${v.spo2}%${gcsPart}${gdsPart}`;
+      return `TD ${v.bpSystolic}/${v.bpDiastolic} mmHg, Nadi ${v.heartRate}x/m, RR ${v.respiratoryRate}x/m, Suhu ${v.temperature}°C, SpO₂ ${v.spo2}%${gcsPart}${sugarPart}`;
     } else if (selectedPatient && selectedPatient.bpSystolic) {
-      return `TD ${selectedPatient.bpSystolic}/${selectedPatient.bpDiastolic} mmHg, Nadi ${selectedPatient.heartRate}x/m, RR ${selectedPatient.respiratoryRate}x/m, Suhu ${selectedPatient.temperature}°C, SpO₂ ${selectedPatient.spo2}%`;
+      return `TD ${selectedPatient.bpSystolic}/${selectedPatient.bpDiastolic} mmHg, Nadi ${selectedPatient.heartRate}x/m, RR ${selectedPatient.respiratoryRate}x/m, Suhu ${selectedPatient.temperature}°C, SpO₂ ${selectedPatient.spo2}%${sugarPart}`;
     }
-    return 'TTV stabil dalam batas normal';
+    return latestSugarRecord ? `TTV stabil dalam batas normal${sugarPart}` : 'TTV stabil dalam batas normal';
   };
 
   // Canonical SBAR structured builder (Clean, clinical, standardized, idempotent)
@@ -231,8 +289,11 @@ export const HandoverView: React.FC<HandoverViewProps> = ({
     const medsStr = buildMedsString();
     const admDate = selectedPatient.admissionDate || '-';
     const allergies = selectedPatient.allergies || 'Tidak ada riwayat alergi';
+    const sugarPart = latestSugarRecord
+      ? `\nGula Darah: ${latestSugarRecord.gds} mg/dL (${latestSugarRecord.sugarType || 'GDS'})${latestSugarRecord.timestamp ? ` [${latestSugarRecord.timestamp}]` : ''}.`
+      : '';
 
-    return `Diagnosis Medis: ${selectedPatient.medicalDiagnosis}.\nTanggal Masuk: ${admDate} | Riwayat Alergi: ${allergies}.\nTerapi Obat Aktif: ${medsStr}.`;
+    return `Diagnosis Medis: ${selectedPatient.medicalDiagnosis}.\nTanggal Masuk: ${admDate} | Riwayat Alergi: ${allergies}.\nTerapi Obat Aktif: ${medsStr}.${sugarPart}`;
   };
 
   const buildCanonicalAssessment = (customVital?: VitalSign) => {
@@ -376,7 +437,7 @@ export const HandoverView: React.FC<HandoverViewProps> = ({
       setAssessmentText(buildCanonicalAssessment());
       setRecommendationText(buildCanonicalRecommendation());
     }
-  }, [selectedPatientId, selectedPatient?.id, currentComplaint]);
+  }, [selectedPatientId, selectedPatient?.id, currentComplaint, latestSugarRecord]);
 
   useEffect(() => {
     if (initialSelectedPatientId) {

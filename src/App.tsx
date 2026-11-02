@@ -1543,6 +1543,7 @@ export default function App() {
               actions={actions}
               vitals={vitals}
               medications={medications}
+              gdsRecords={gdsRecords}
               userSession={userSession}
               initialSelectedPatientId={handoverTargetPatientId}
               initialSelectedVital={handoverPrefilledVital}

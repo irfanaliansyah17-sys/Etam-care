@@ -121,12 +121,23 @@ export interface Patient {
   deceasedNotes?: string;
 }
 
+export type SugarTestType =
+  | 'GDS (Sewaktu)'
+  | 'GDP (Puasa)'
+  | 'GD2PP (2 Jam PP)'
+  | 'Sebelum Tidur'
+  | 'Pre-Prandial (Sebelum Makan)'
+  | 'Post-Prandial (Setelah Makan)'
+  | 'Gula Darah Acak'
+  | 'Pemeriksaan Khusus';
+
 export interface GdsRecord {
   id: string;
   patientId: string;
   timestamp: string; // YYYY-MM-DD HH:mm
-  gds: number; // Kadar Gula Darah Sewaktu (mg/dL)
-  condition?: string; // e.g. "GDS Sewaktu", "GDP (Puasa)", "GDS 2 Jam PP", "Sebelum Tidur"
+  gds: number; // Kadar Gula Darah (mg/dL)
+  sugarType?: SugarTestType | string; // Jenis pemeriksaan gula darah
+  condition?: string; // e.g. "GDS Sewaktu", "GDP (Puasa)", "GD2PP (2 Jam PP)", "Sebelum Tidur"
   nurseName: string;
   notes?: string;
 }

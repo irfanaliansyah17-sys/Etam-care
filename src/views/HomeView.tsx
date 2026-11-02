@@ -10,7 +10,6 @@ import {
   ChevronRight,
   Clock,
   Building2,
-  Stethoscope,
   HeartPulse,
   QrCode,
   Sparkles,
@@ -95,8 +94,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
   );
   const totalActivePatients = activePatients.length;
 
-  const priorityPatients = useMemo(
-    () => activePatients.filter(p => p.status === 'kritis' || p.status === 'perhatian'),
+  const kritisPatients = useMemo(
+    () => activePatients.filter(p => p.status === 'kritis'),
+    [activePatients]
+  );
+  const perhatianPatients = useMemo(
+    () => activePatients.filter(p => p.status === 'perhatian'),
     [activePatients]
   );
   const stablePatients = useMemo(
@@ -104,21 +107,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
     [activePatients]
   );
 
-  // Active filter state for patient list on Beranda ('semua' | 'prioritas' | 'stabil')
-  const [patientFilter, setPatientFilter] = useState<'semua' | 'prioritas' | 'stabil'>('semua');
+  // Active filter state for patient list on Beranda ('semua' | 'kritis' | 'perhatian' | 'stabil')
+  const [patientFilter, setPatientFilter] = useState<'semua' | 'kritis' | 'perhatian' | 'stabil'>('semua');
   // Fitur pencarian pasien di beranda
   const [searchQuery, setSearchQuery] = useState('');
 
   // Base filtered patients by category tab
   const categoryFilteredPatients = useMemo(() => {
-    if (patientFilter === 'prioritas') {
-      return priorityPatients;
+    if (patientFilter === 'kritis') {
+      return kritisPatients;
+    }
+    if (patientFilter === 'perhatian') {
+      return perhatianPatients;
     }
     if (patientFilter === 'stabil') {
       return stablePatients;
     }
     return activePatients;
-  }, [patientFilter, priorityPatients, stablePatients, activePatients]);
+  }, [patientFilter, kritisPatients, perhatianPatients, stablePatients, activePatients]);
 
   // Final filtered patients to display on Beranda (sorted by lowest ward & bed number ascending)
   const displayedPatients = useMemo(() => {
@@ -193,7 +199,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </div>
 
-      {/* 2. Ringkasan Angka Utama (4 KPI Cards Ringkas - Klik Langsung Saring Daftar Pasien) */}
+      {/* 2. Ringkasan Angka Utama (4 KPI Cards Ringkas - Pasien Aktif, Kritis, Perhatian, Stabil) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {/* Pasien Aktif */}
         <button
@@ -221,28 +227,52 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <span className="text-[11px] text-slate-500 mt-0.5 block">Dirawat di bangsal {userSession.ward}</span>
         </button>
 
-        {/* Pasien Prioritas (Kritis & Perhatian) */}
+        {/* Pasien Kritis */}
         <button
           onClick={() => {
-            setPatientFilter('prioritas');
+            setPatientFilter('kritis');
             scrollToPatientSection();
           }}
           className={`p-3.5 rounded-2xl border shadow-xs active:scale-[0.98] text-left transition-all group cursor-pointer ${
-            patientFilter === 'prioritas'
+            patientFilter === 'kritis'
               ? 'bg-rose-50 border-rose-400 ring-2 ring-rose-400/20'
               : 'bg-white border-rose-100 hover:border-rose-300'
           }`}
         >
           <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-xs font-bold text-rose-700">Pasien Prioritas</span>
+            <span className="text-xs font-bold text-rose-700">Pasien Kritis</span>
             <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
               <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-black text-rose-600 tabular-nums">
-            {priorityPatients.length}
+            {kritisPatients.length}
           </div>
-          <span className="text-[11px] text-rose-600/80 mt-0.5 block">Kritis & perhatian khusus</span>
+          <span className="text-[11px] text-rose-600/80 mt-0.5 block">Kondisi gawat / pengawasan ketat</span>
+        </button>
+
+        {/* Pasien Perhatian */}
+        <button
+          onClick={() => {
+            setPatientFilter('perhatian');
+            scrollToPatientSection();
+          }}
+          className={`p-3.5 rounded-2xl border shadow-xs active:scale-[0.98] text-left transition-all group cursor-pointer ${
+            patientFilter === 'perhatian'
+              ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-400/20'
+              : 'bg-white border-amber-200 hover:border-amber-400'
+          }`}
+        >
+          <div className="flex items-center justify-between text-slate-500 mb-1">
+            <span className="text-xs font-bold text-amber-900">Pasien Perhatian</span>
+            <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-amber-600 tabular-nums">
+            {perhatianPatients.length}
+          </div>
+          <span className="text-[11px] text-amber-800/80 mt-0.5 block">Observasi klinis &amp; gula darah</span>
         </button>
 
         {/* Pasien Kondisi Stabil */}
@@ -270,7 +300,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </button>
       </div>
 
-      {/* 3. Tombol Cepat: Tambah Pasien, Catat TTV, Catat GDS, Catat Obat, Catat Tindakan, Akses QR */}
+      {/* 3. Tombol Cepat: Tambah Pasien, Catat TTV, Catat Gula Darah, Catat Obat, Catat Tindakan, Akses QR */}
       <div className="space-y-2">
         <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider px-1">
           Aksi Cepat Perawat
@@ -294,14 +324,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <span className="text-xs font-bold leading-tight">Catat TTV Baru</span>
           </button>
 
-          {/* 3. Catat GDS Khusus */}
+          {/* 3. Catat Gula Darah */}
           <button
             onClick={() => (onOpenAddGds ? onOpenAddGds() : onOpenAddVital && onOpenAddVital())}
             className="flex flex-col items-center justify-center p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 min-h-[58px] shadow-xs hover:bg-amber-100 active:scale-95 transition-all text-center cursor-pointer"
-            title="Catat Gula Darah Sewaktu pasien tanpa harus input seluruh TTV"
+            title="Catat pemeriksaan gula darah pasien (GDP, GDS, GD2PP, dll.)"
           >
             <Droplet className="w-5 h-5 mb-1 text-amber-600" />
-            <span className="text-xs font-bold leading-tight">Catat GDS</span>
+            <span className="text-xs font-bold leading-tight">Catat Gula Darah</span>
           </button>
 
           {/* 4. Catat Obat (Terapi Farmakologi) */}
@@ -341,10 +371,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
           <div className="flex items-center gap-2">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              {patientFilter === 'prioritas' ? (
+              {patientFilter === 'kritis' ? (
                 <>
                   <AlertTriangle className="w-4 h-4 text-rose-600" />
-                  <span className="text-rose-700">Pasien Prioritas ({displayedPatients.length})</span>
+                  <span className="text-rose-700">Pasien Kritis ({displayedPatients.length})</span>
+                </>
+              ) : patientFilter === 'perhatian' ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <span className="text-amber-800">Pasien Perhatian ({displayedPatients.length})</span>
                 </>
               ) : patientFilter === 'stabil' ? (
                 <>
@@ -370,15 +405,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
               Semua ({totalActivePatients})
             </button>
             <button
-              onClick={() => setPatientFilter('prioritas')}
+              onClick={() => setPatientFilter('kritis')}
               className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                patientFilter === 'prioritas'
+                patientFilter === 'kritis'
                   ? 'bg-rose-600 text-white shadow-xs'
                   : 'bg-white border border-rose-200 text-rose-700 hover:bg-rose-50'
               }`}
             >
               <AlertTriangle className="w-3.5 h-3.5" />
-              <span>Prioritas ({priorityPatients.length})</span>
+              <span>Kritis ({kritisPatients.length})</span>
+            </button>
+            <button
+              onClick={() => setPatientFilter('perhatian')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                patientFilter === 'perhatian'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-white border border-amber-300 text-amber-900 hover:bg-amber-50'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Perhatian ({perhatianPatients.length})</span>
             </button>
             <button
               onClick={() => setPatientFilter('stabil')}
@@ -434,12 +480,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         {patientFilter !== 'semua' && (
           <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs ${
-            patientFilter === 'prioritas'
+            patientFilter === 'kritis'
               ? 'bg-rose-50/80 border-rose-200 text-rose-800'
+              : patientFilter === 'perhatian'
+              ? 'bg-amber-50/80 border-amber-300 text-amber-900'
               : 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
           }`}>
             <span className="font-medium">
-              Menampilkan {displayedPatients.length} pasien {patientFilter === 'prioritas' ? 'prioritas (kritis & perhatian khusus)' : 'dalam kondisi stabil'}.
+              Menampilkan {displayedPatients.length} pasien{' '}
+              {patientFilter === 'kritis'
+                ? 'kritis (pengawasan intensif)'
+                : patientFilter === 'perhatian'
+                ? 'perhatian khusus (observasi ketat)'
+                : 'dalam kondisi stabil'}
+              .
             </span>
             <button
               onClick={() => setPatientFilter('semua')}
@@ -464,8 +518,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   Bersihkan Pencarian
                 </button>
               </div>
-            ) : patientFilter === 'prioritas'
-              ? 'Tidak ada pasien dalam kondisi kritis atau perhatian khusus saat ini. Semua pasien stabil.'
+            ) : patientFilter === 'kritis'
+              ? 'Tidak ada pasien dalam kondisi kritis saat ini.'
+              : patientFilter === 'perhatian'
+              ? 'Tidak ada pasien dalam status perhatian saat ini.'
               : patientFilter === 'stabil'
               ? 'Belum ada data pasien dengan status stabil.'
               : `Belum ada pasien aktif di bangsal ${userSession.ward}.`}

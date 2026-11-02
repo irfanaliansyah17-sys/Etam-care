@@ -165,6 +165,57 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
     }
   }, [patient?.id, patient?.plannedActions, patient?.labResults, patient?.dpjp, patient?.dpjps, doctors]);
 
+  // Synthesize complete sugar history (both dedicated GdsRecord and TTV with gds)
+  // MUST be called unconditionally at top-level to satisfy Rules of Hooks
+  const combinedSugarRecords = React.useMemo(() => {
+    if (!patient) return [];
+    const list: Array<{
+      id: string;
+      timestamp: string;
+      gds: number;
+      sugarType: string;
+      nurseName: string;
+      notes?: string;
+      isFromVital?: boolean;
+    }> = [];
+
+    const seenKeys = new Set<string>();
+
+    // 1. From dedicated gdsRecords
+    for (const r of (gdsRecords || []).filter(r => r.patientId === patient.id)) {
+      const key = `${r.timestamp}-${r.gds}`;
+      seenKeys.add(key);
+      list.push({
+        id: r.id,
+        timestamp: r.timestamp,
+        gds: r.gds,
+        sugarType: r.sugarType || r.condition || 'GDS (Sewaktu)',
+        nurseName: r.nurseName,
+        notes: r.notes,
+        isFromVital: false,
+      });
+    }
+
+    // 2. From vitals with gds
+    for (const v of (vitals || []).filter(v => v.patientId === patient.id && v.gds !== undefined && v.gds !== null && v.gds > 0)) {
+      const key = `${v.timestamp}-${v.gds}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        list.push({
+          id: `vital-sugar-${v.id}`,
+          timestamp: v.timestamp,
+          gds: v.gds!,
+          sugarType: 'GDS (Sewaktu)',
+          nurseName: v.nurseName,
+          notes: v.notes ? `Pemeriksaan TTV: ${v.notes}` : 'Dicatat melalui input TTV',
+          isFromVital: true,
+        });
+      }
+    }
+
+    return list.sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1));
+  }, [gdsRecords, vitals, patient?.id]);
+
   const handleSaveDpjpLocal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!patient || !onUpdatePatientDpjp) return;
@@ -218,6 +269,16 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
     });
   };
 
+  const handleAddLabPreset = (testName: string) => {
+    setLabInput(prev => {
+      const trimmed = prev.trim();
+      const line = `- ${testName}: `;
+      if (!trimmed) return line;
+      if (trimmed.toLowerCase().includes(testName.toLowerCase())) return trimmed;
+      return `${trimmed}\n${line}`;
+    });
+  };
+
   if (!isOpen || !patient) return null;
 
   const patientVitals = vitals
@@ -236,10 +297,6 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
   const isPerhatian = patient.status === 'perhatian';
 
   const hospitalDayInfo = calculateHospitalDay(patient.admissionDate);
-
-  const patientGdsList = (gdsRecords || [])
-    .filter(r => r.patientId === patient.id)
-    .sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1));
 
   const cleanDpjp = resolveDoctorName(patient.dpjp);
   const doctorList = (
@@ -265,9 +322,9 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
     },
     {
       id: 'gds' as DetailTabType,
-      label: 'Rekapan GDS',
+      label: 'Rekapan Gula',
       icon: Droplet,
-      count: patientGdsList.length,
+      count: combinedSugarRecords.length,
     },
     {
       id: 'obat' as DetailTabType,
@@ -529,13 +586,13 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                         <span className="text-[10px] text-blue-500 font-semibold mt-0.5">Oksigen</span>
                       </div>
 
-                      {/* Gula Darah Sewaktu (GDS) */}
+                      {/* Gula Darah */}
                       <div className={`p-2 sm:p-2.5 rounded-xl border shadow-2xs flex flex-col justify-center ${
                         (latestVital.gds !== undefined || patient.gds !== undefined)
                           ? 'border-amber-200 bg-amber-50/70'
                           : 'border-slate-200 bg-slate-50/60'
                       }`}>
-                        <span className="text-[10px] sm:text-[11px] font-bold block mb-0.5 text-amber-900">GDS (Gula)</span>
+                        <span className="text-[10px] sm:text-[11px] font-bold block mb-0.5 text-amber-900">Gula Darah</span>
                         <strong className="text-amber-900 text-sm sm:text-base font-black tracking-tight">
                           {latestVital.gds ?? patient.gds ?? '-'}
                         </strong>
@@ -1086,6 +1143,252 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
             </div>
           )}
 
+          {/* TAB 2b: REKAPAN PEMERIKSAAN GULA DARAH LENGKAP */}
+          {activeTab === 'gds' && (
+            <div className="space-y-3.5">
+              {/* Header Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-gradient-to-r from-amber-50 via-amber-100/60 to-orange-50 p-3 sm:p-3.5 rounded-2xl border border-amber-300/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <Droplet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-sm flex items-center gap-1.5">
+                      <span>Rekapan Riwayat Gula Darah ({combinedSugarRecords.length})</span>
+                    </h3>
+                    <p className="text-[11px] text-amber-900/80 font-medium">
+                      Pemantauan kadar glukosa berkala (GDP, GDS, GD2PP, Sebelum Tidur, dll.)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 self-start sm:self-center shrink-0">
+                  {onOpenAddGds && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenAddGds(patient)}
+                      className="min-h-[34px] px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-2xs active:scale-95 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Catat Gula Darah</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Quick Summary Cards (Analisis Gula Darah) */}
+              {combinedSugarRecords.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  {/* Terakhir */}
+                  <div className="bg-white p-3 rounded-2xl border border-amber-200 shadow-2xs">
+                    <span className="text-[10.5px] font-bold text-slate-500 block">Kadar Terkini</span>
+                    <div className="text-xl font-black text-amber-950 mt-0.5">
+                      {combinedSugarRecords[0].gds}{' '}
+                      <span className="text-[10px] font-semibold text-slate-400">mg/dL</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-800 line-clamp-1 mt-0.5">
+                      {combinedSugarRecords[0].sugarType}
+                    </span>
+                  </div>
+
+                  {/* Rata-rata */}
+                  <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+                    <span className="text-[10.5px] font-bold text-slate-500 block">Rata-rata</span>
+                    <div className="text-xl font-black text-slate-900 mt-0.5">
+                      {Math.round(
+                        combinedSugarRecords.reduce((acc, curr) => acc + curr.gds, 0) /
+                          combinedSugarRecords.length
+                      )}{' '}
+                      <span className="text-[10px] font-semibold text-slate-400">mg/dL</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Dari {combinedSugarRecords.length} kali cek
+                    </span>
+                  </div>
+
+                  {/* Tertinggi */}
+                  <div className="bg-white p-3 rounded-2xl border border-rose-100 shadow-2xs">
+                    <span className="text-[10.5px] font-bold text-rose-700 block">Tertinggi (Max)</span>
+                    <div className="text-xl font-black text-rose-600 mt-0.5">
+                      {Math.max(...combinedSugarRecords.map(r => r.gds))}{' '}
+                      <span className="text-[10px] font-semibold text-rose-400">mg/dL</span>
+                    </div>
+                    <span className="text-[10px] text-rose-600/70 mt-0.5 block">Puncak hiperglikemia</span>
+                  </div>
+
+                  {/* Terendah */}
+                  <div className="bg-white p-3 rounded-2xl border border-emerald-100 shadow-2xs">
+                    <span className="text-[10.5px] font-bold text-emerald-700 block">Terendah (Min)</span>
+                    <div className="text-xl font-black text-emerald-600 mt-0.5">
+                      {Math.min(...combinedSugarRecords.map(r => r.gds))}{' '}
+                      <span className="text-[10px] font-semibold text-emerald-400">mg/dL</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-600/70 mt-0.5 block">Batas nadir terkontrol</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Daftar Riwayat Pengukuran Gula Darah */}
+              {combinedSugarRecords.length === 0 ? (
+                <div className="bg-slate-50 rounded-2xl p-6 text-center text-slate-500 space-y-2 border border-slate-200">
+                  <Droplet className="w-8 h-8 text-amber-300 mx-auto" />
+                  <p className="text-xs font-semibold text-slate-700">
+                    Belum ada rekapan pemeriksaan gula darah untuk pasien ini.
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Hasil pemeriksaan gula darah (GDP, GDS, GD2PP, dll.) yang dicatat akan tersusun rapi di sini.
+                  </p>
+                  {onOpenAddGds && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenAddGds(patient)}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Catat Gula Darah Pertama</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {combinedSugarRecords.map((r, idx) => {
+                    const isPuasa = (r.sugarType || '').toLowerCase().includes('puasa');
+                    let interpTag = {
+                      text: 'Normal (70-140)',
+                      color: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                    };
+
+                    if (r.gds < 70) {
+                      interpTag = {
+                        text: 'Hipoglikemia (< 70)',
+                        color: 'bg-rose-100 text-rose-800 border-rose-300',
+                      };
+                    } else if (isPuasa) {
+                      if (r.gds <= 99) {
+                        interpTag = {
+                          text: 'Normal Puasa (70-99)',
+                          color: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                        };
+                      } else if (r.gds <= 125) {
+                        interpTag = {
+                          text: 'Pra-Diabetes (100-125)',
+                          color: 'bg-amber-100 text-amber-800 border-amber-300',
+                        };
+                      } else {
+                        interpTag = {
+                          text: 'Hiperglikemia Puasa (≥ 126)',
+                          color: 'bg-rose-100 text-rose-800 border-rose-300',
+                        };
+                      }
+                    } else {
+                      if (r.gds <= 140) {
+                        interpTag = {
+                          text: 'Normal (70-140)',
+                          color: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                        };
+                      } else if (r.gds < 200) {
+                        interpTag = {
+                          text: 'Meningkat / Toleransi Terganggu (141-199)',
+                          color: 'bg-amber-100 text-amber-800 border-amber-300',
+                        };
+                      } else {
+                        interpTag = {
+                          text: 'Hiperglikemia (≥ 200)',
+                          color: 'bg-rose-100 text-rose-800 border-rose-300',
+                        };
+                      }
+                    }
+
+                    const typeLower = (r.sugarType || '').toLowerCase();
+                    const typeBadgeColor = typeLower.includes('puasa')
+                      ? 'bg-blue-100 text-blue-900 border-blue-200'
+                      : typeLower.includes('2 jam') || typeLower.includes('post')
+                      ? 'bg-purple-100 text-purple-900 border-purple-200'
+                      : typeLower.includes('tidur')
+                      ? 'bg-indigo-100 text-indigo-900 border-indigo-200'
+                      : 'bg-amber-100 text-amber-900 border-amber-200';
+
+                    return (
+                      <div
+                        key={r.id}
+                        className={`p-3 rounded-2xl border shadow-2xs space-y-2 transition-all ${
+                          idx === 0
+                            ? 'bg-amber-50/40 border-amber-300/80 ring-1 ring-amber-300/40'
+                            : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        {/* Header bar of record */}
+                        <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 border-b border-slate-100 pb-1.5 gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <span className="font-bold text-slate-800">{r.timestamp}</span>
+                            
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${typeBadgeColor}`}>
+                              {r.sugarType}
+                            </span>
+
+                            {idx === 0 && (
+                              <span className="bg-amber-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                Terbaru
+                              </span>
+                            )}
+
+                            {r.isFromVital && (
+                              <span className="text-[9.5px] font-semibold text-slate-400 italic">
+                                (TTV)
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px]">
+                              Oleh: <strong className="text-slate-800 font-bold">{r.nurseName}</strong>
+                            </span>
+
+                            {onDeleteGdsRecord && !r.isFromVital && (
+                              <button
+                                type="button"
+                                onClick={() => onDeleteGdsRecord(r.id, patient.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                title="Hapus catatan gula darah ini"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Value and Interpretation Banner */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-2xl sm:text-3xl font-black text-amber-950 tabular-nums">
+                              {r.gds}
+                            </span>
+                            <span className="text-xs font-bold text-amber-800">mg/dL</span>
+                          </div>
+
+                          <span
+                            className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border flex items-center gap-1 ${interpTag.color}`}
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>{interpTag.text}</span>
+                          </span>
+                        </div>
+
+                        {/* Notes if present */}
+                        {r.notes && (
+                          <div className="text-[11px] text-slate-600 italic bg-slate-50 p-2 rounded-xl border border-slate-200">
+                            Catatan: {r.notes}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* TAB 3: OBAT & TERAPI (MENAMBAHKAN & MENGHAPUS OBAT) */}
           {activeTab === 'obat' && (
             <div className="space-y-3.5">
@@ -1570,173 +1873,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
             </div>
           )}
 
-          {/* TAB: REKAPAN GDS (KHUSUS GULA DARAH SEWAKTU - TERPISAH DARI TTV) */}
-          {activeTab === 'gds' && (
-            <div className="space-y-3.5">
-              {/* Header & Quick Action */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-amber-50/70 p-3 sm:p-3.5 rounded-2xl border border-amber-200">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Droplet className="w-5 h-5 text-amber-600" />
-                    <h3 className="font-black text-slate-900 text-xs sm:text-sm uppercase tracking-wider">
-                      Rekapan Hasil Khusus GDS Pasien ({patientGdsList.length})
-                    </h3>
-                  </div>
-                  <p className="text-[11px] text-amber-900 mt-0.5">
-                    Data riwayat Gula Darah Sewaktu tersimpan terpisah khusus dan tidak mencemari riwayat TTV rutin.
-                  </p>
-                </div>
 
-                {onOpenAddGds && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenAddGds(patient)}
-                    className="min-h-[36px] px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>+ Catat GDS Pasien</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Metric Overview Cards */}
-              {patientGdsList.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">GDS Terakhir</span>
-                    <strong className="text-amber-800 text-base sm:text-lg font-black block mt-0.5">
-                      {patientGdsList[0].gds} <span className="text-[10px] text-slate-400 font-normal">mg/dL</span>
-                    </strong>
-                    <span className="text-[9px] text-slate-400 block truncate">{patientGdsList[0].timestamp}</span>
-                  </div>
-
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">GDS Tertinggi</span>
-                    <strong className="text-rose-700 text-base sm:text-lg font-black block mt-0.5">
-                      {Math.max(...patientGdsList.map(r => r.gds))} <span className="text-[10px] text-slate-400 font-normal">mg/dL</span>
-                    </strong>
-                    <span className="text-[9px] text-slate-400 block">Puncak Terdeteksi</span>
-                  </div>
-
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">GDS Terendah</span>
-                    <strong className="text-blue-700 text-base sm:text-lg font-black block mt-0.5">
-                      {Math.min(...patientGdsList.map(r => r.gds))} <span className="text-[10px] text-slate-400 font-normal">mg/dL</span>
-                    </strong>
-                    <span className="text-[9px] text-slate-400 block">Nilai Terendah</span>
-                  </div>
-
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Rata-rata GDS</span>
-                    <strong className="text-slate-800 text-base sm:text-lg font-black block mt-0.5">
-                      {Math.round(patientGdsList.reduce((acc, c) => acc + c.gds, 0) / patientGdsList.length)}{' '}
-                      <span className="text-[10px] text-slate-400 font-normal">mg/dL</span>
-                    </strong>
-                    <span className="text-[9px] text-slate-400 block">Dari {patientGdsList.length} kali cek</span>
-                  </div>
-                </div>
-              )}
-
-              {/* List of GDS Records */}
-              {patientGdsList.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-xs space-y-2">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
-                    <Droplet className="w-6 h-6" />
-                  </div>
-                  <p className="font-bold text-slate-700 text-sm">Belum Ada Rekapan Hasil GDS Khusus</p>
-                  <p className="text-slate-400 text-xs max-w-sm mx-auto">
-                    Setiap kali Anda mencatat GDS melalui tombol "Catat GDS", hasilnya akan otomatis terekap rapi di lembar khusus ini tanpa mencemari riwayat TTV pasien.
-                  </p>
-                  {onOpenAddGds && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenAddGds(patient)}
-                      className="mt-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Catat GDS Pasien Sekarang</span>
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
-                  <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-amber-100/90 text-amber-950 border-b border-amber-200 font-black text-[11px] uppercase tracking-wider">
-                          <th className="py-2.5 px-3">WAKTU PEMERIKSAAN</th>
-                          <th className="py-2.5 px-3">HASIL GDS</th>
-                          <th className="py-2.5 px-3">INTERPRETASI KLINIS</th>
-                          <th className="py-2.5 px-3">KONDISI PENGAMBILAN</th>
-                          <th className="py-2.5 px-3">PERAWAT</th>
-                          <th className="py-2.5 px-2.5 text-center">AKSI</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {patientGdsList.map(record => {
-                          const getInterpretation = (val: number) => {
-                            if (val < 70) return { label: 'Hipoglikemia (< 70)', color: 'bg-rose-100 text-rose-800 border-rose-300' };
-                            if (val <= 140) return { label: 'Normal (70-140)', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
-                            if (val < 200) return { label: 'Meningkat (141-199)', color: 'bg-amber-100 text-amber-900 border-amber-300' };
-                            return { label: 'Hiperglikemia (≥ 200)', color: 'bg-rose-100 text-rose-800 border-rose-300' };
-                          };
-                          const interp = getInterpretation(record.gds);
-
-                          return (
-                            <tr key={record.id} className="hover:bg-amber-50/30 transition-colors">
-                              <td className="py-2.5 px-3 font-medium text-slate-700 whitespace-nowrap">
-                                <div className="flex items-center gap-1.5 font-mono text-[11px]">
-                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>{record.timestamp}</span>
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-3 whitespace-nowrap">
-                                <span className="text-sm font-black text-slate-900 bg-amber-50/80 border border-amber-200 px-2 py-0.5 rounded-lg">
-                                  {record.gds} <span className="text-[10px] text-slate-500 font-semibold">mg/dL</span>
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3 whitespace-nowrap">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${interp.color}`}>
-                                  {interp.label}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3">
-                                <span className="text-slate-800 font-semibold text-xs">
-                                  {record.condition || 'GDS Sewaktu'}
-                                </span>
-                                {record.notes && record.notes !== record.condition && (
-                                  <div className="text-[10px] text-slate-500 italic mt-0.5">{record.notes}</div>
-                                )}
-                              </td>
-                              <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap font-medium text-[11px]">
-                                {record.nurseName || 'Perawat Bertugas'}
-                              </td>
-                              <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
-                                {onDeleteGdsRecord && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (window.confirm(`Hapus catatan GDS ${record.gds} mg/dL pada ${record.timestamp}?`)) {
-                                        onDeleteGdsRecord(record.id, patient.id);
-                                      }
-                                    }}
-                                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
-                                    title="Hapus catatan GDS ini"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Footer Quick Action */}

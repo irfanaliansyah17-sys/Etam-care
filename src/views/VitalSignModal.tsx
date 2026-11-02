@@ -474,22 +474,23 @@ export const VitalSignModal: React.FC<VitalSignModalProps> = ({
               </div>
             </div>
 
-            {/* GDS Opsional */}
-            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+            {/* Gula Darah Opsional */}
+            <div className="p-2.5 bg-amber-50/60 border border-amber-200 rounded-xl space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="block font-bold text-slate-800 text-[11px]">
-                  Gula Darah Sewaktu (GDS) <span className="text-slate-400 font-normal">(opsional)</span>
+                <label className="block font-bold text-amber-950 text-[11px]">
+                  Kadar Gula Darah <span className="text-slate-400 font-normal">(opsional)</span>
                 </label>
+                <span className="text-[10px] text-amber-800 font-semibold">Tersimpan ke Rekapan Gula</span>
               </div>
               <div className="relative">
                 <input
                   type="number"
                   value={gds}
                   onChange={e => setGds(e.target.value)}
-                  placeholder="Boleh dikosongkan jika tidak diperiksa..."
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-slate-800 text-xs focus:outline-none focus:border-rose-500"
+                  placeholder="Kadar gula darah (mg/dL)..."
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white font-bold text-slate-900 text-xs focus:outline-none focus:border-amber-500"
                 />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-amber-700 font-bold">
                   mg/dL
                 </span>
               </div>

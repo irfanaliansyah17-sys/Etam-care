@@ -553,6 +553,21 @@ export default function App() {
     }
 
     const pt = patients.find(p => p.id === patientId);
+
+    // If vital sign includes a blood sugar value, auto-sync into dedicated sugar records so it is NEVER missing in rekapan gula
+    if (vitalData.gds !== undefined && vitalData.gds !== null && !isNaN(Number(vitalData.gds)) && Number(vitalData.gds) > 0) {
+      storage.addGdsRecord({
+        patientId,
+        timestamp: vitalData.timestamp,
+        gds: Number(vitalData.gds),
+        sugarType: 'GDS (Sewaktu)',
+        condition: 'GDS Sewaktu (TTV)',
+        nurseName: vitalData.nurseName,
+        notes: vitalData.notes ? `Pemeriksaan TTV: ${vitalData.notes}` : 'Pemeriksaan rutin TTV',
+      });
+      setGdsRecords(storage.getGdsRecords());
+    }
+
     showToast(
       existingVitalId
         ? `Riwayat TTV pasien ${pt?.name || ''} berhasil diperbarui.`
@@ -564,11 +579,13 @@ export default function App() {
     patientId: string,
     gdsValue: number,
     timestamp: string,
-    conditionOrNotes?: string
+    notes?: string,
+    sugarType?: string
   ) => {
     const pt = patients.find(p => p.id === patientId);
+    const resolvedSugarType = sugarType || 'GDS (Sewaktu)';
 
-    // 1. Update patient's current GDS value
+    // 1. Update patient's current blood sugar value
     const updatedPatients = patients.map(p =>
       p.id === patientId ? { ...p, gds: gdsValue } : p
     );
@@ -579,18 +596,19 @@ export default function App() {
       setDetailPatient(prev => (prev ? { ...prev, gds: gdsValue } : null));
     }
 
-    // 2. Save to dedicated GdsRecord (Rekapan Khusus GDS - Terpisah dari TTV)
+    // 2. Save to dedicated GdsRecord (Rekapan Khusus Gula Darah - Terintegrasi)
     storage.addGdsRecord({
       patientId,
       timestamp,
       gds: gdsValue,
-      condition: conditionOrNotes || 'GDS Sewaktu',
+      sugarType: resolvedSugarType,
+      condition: resolvedSugarType,
       nurseName: userSession.nurseName,
-      notes: conditionOrNotes || undefined,
+      notes: notes || undefined,
     });
     setGdsRecords(storage.getGdsRecords());
 
-    showToast(`GDS ${gdsValue} mg/dL untuk pasien ${pt?.name || ''} berhasil dicatat.`);
+    showToast(`Pemeriksaan gula darah (${resolvedSugarType}) ${gdsValue} mg/dL untuk ${pt?.name || 'pasien'} berhasil dicatat.`);
     setIsGdsModalOpen(false);
     setGdsModalPatient(null);
   };
@@ -1541,6 +1559,7 @@ export default function App() {
               actions={actions}
               soaps={soaps}
               vitals={vitals}
+              gdsRecords={gdsRecords}
               wards={wards}
               doctors={doctors}
               userSession={userSession}
@@ -1580,6 +1599,7 @@ export default function App() {
           actions={actions}
           soaps={soaps}
           handovers={handovers}
+          gdsRecords={gdsRecords}
           onClose={() => setDetailPatient(null)}
           onEdit={pt => {
             // Keep detailPatient open so after edit saves or cancels, user stays on the patient detail view
@@ -1598,6 +1618,11 @@ export default function App() {
             setVitalModalInitial(existingVital || null);
             setIsVitalModalOpen(true);
           }}
+          onOpenAddGds={pt => {
+            setGdsModalPatient(pt);
+            setIsGdsModalOpen(true);
+          }}
+          onDeleteGdsRecord={handleDeleteGdsRecord}
           onOpenAddMedication={handleOpenAddMedication}
           onEditMedication={handleOpenEditMedication}
           onDeleteMedication={handleRequestDeleteMedication}

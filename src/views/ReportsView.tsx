@@ -12,6 +12,8 @@ import {
   Home,
   Skull,
   FileCheck,
+  Droplet,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   Patient,
@@ -22,6 +24,7 @@ import {
   Ward,
   DoctorDPJP,
   PatientLifeStatus,
+  GdsRecord,
 } from '../types';
 import { UserSession } from '../services/storageService';
 import { exportToCSV, triggerPrintReport } from '../utils/exportUtils';
@@ -32,6 +35,7 @@ interface ReportsViewProps {
   actions: NursingAction[];
   soaps: SOAPNote[];
   vitals: VitalSign[];
+  gdsRecords?: GdsRecord[];
   wards: Ward[];
   doctors: DoctorDPJP[];
   userSession: UserSession;
@@ -44,6 +48,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   actions,
   soaps,
   vitals,
+  gdsRecords = [],
   wards,
   doctors,
   userSession,
@@ -120,6 +125,126 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       };
     });
   }, [doctors, filteredPatients]);
+
+  // Synthesize complete sugar records matching filtered patients
+  const filteredPatientIds = useMemo(
+    () => new Set(filteredPatients.map(p => p.id)),
+    [filteredPatients]
+  );
+
+  const sugarReportList = useMemo(() => {
+    const list: Array<{
+      id: string;
+      patientId: string;
+      patientName: string;
+      rmNumber: string;
+      bed: string;
+      room: string;
+      timestamp: string;
+      gds: number;
+      sugarType: string;
+      nurseName: string;
+      notes?: string;
+    }> = [];
+
+    const seen = new Set<string>();
+
+    for (const r of (gdsRecords || []).filter(r => filteredPatientIds.has(r.patientId))) {
+      const pt = patients.find(p => p.id === r.patientId);
+      const key = `${r.patientId}-${r.timestamp}-${r.gds}`;
+      seen.add(key);
+      list.push({
+        id: r.id,
+        patientId: r.patientId,
+        patientName: pt?.name || 'Pasien',
+        rmNumber: pt?.rmNumber || '-',
+        bed: pt?.bed || '-',
+        room: pt?.room || '-',
+        timestamp: r.timestamp,
+        gds: r.gds,
+        sugarType: r.sugarType || r.condition || 'GDS (Sewaktu)',
+        nurseName: r.nurseName,
+        notes: r.notes,
+      });
+    }
+
+    // Also include vitals with gds for filtered patients
+    for (const v of vitals.filter(v => filteredPatientIds.has(v.patientId) && v.gds !== undefined && v.gds !== null && v.gds > 0)) {
+      const key = `${v.patientId}-${v.timestamp}-${v.gds}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const pt = patients.find(p => p.id === v.patientId);
+        list.push({
+          id: `vital-${v.id}`,
+          patientId: v.patientId,
+          patientName: pt?.name || 'Pasien',
+          rmNumber: pt?.rmNumber || '-',
+          bed: pt?.bed || '-',
+          room: pt?.room || '-',
+          timestamp: v.timestamp,
+          gds: v.gds!,
+          sugarType: 'GDS (Sewaktu)',
+          nurseName: v.nurseName,
+          notes: v.notes ? `Pemeriksaan TTV: ${v.notes}` : 'Input TTV',
+        });
+      }
+    }
+
+    return list.sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1));
+  }, [gdsRecords, vitals, filteredPatientIds, patients]);
+
+  const handleExportSugarCSV = () => {
+    try {
+      const filename = `ETAM_CARE_Rekapan_Gula_Darah_${
+        reportType === 'harian' ? selectedDate : selectedMonth
+      }`;
+
+      const headers = [
+        'Waktu Pemeriksaan',
+        'No. RM',
+        'Nama Pasien',
+        'Bangsal',
+        'Bed',
+        'Jenis Pemeriksaan',
+        'Kadar Gula Darah (mg/dL)',
+        'Interpretasi Klinis',
+        'Perawat Pemeriksa',
+        'Catatan Klinis',
+      ];
+
+      const rows = sugarReportList.map(s => {
+        let interp = 'Normal';
+        if (s.gds < 70) interp = 'Hipoglikemia (<70)';
+        else if (s.sugarType.toLowerCase().includes('puasa')) {
+          if (s.gds <= 99) interp = 'Normal Puasa (70-99)';
+          else if (s.gds <= 125) interp = 'Pra-Diabetes (100-125)';
+          else interp = 'Hiperglikemia Puasa (≥126)';
+        } else {
+          if (s.gds <= 140) interp = 'Normal (70-140)';
+          else if (s.gds < 200) interp = 'Meningkat (141-199)';
+          else interp = 'Hiperglikemia (≥200)';
+        }
+
+        return [
+          s.timestamp,
+          s.rmNumber,
+          s.patientName,
+          s.room,
+          s.bed,
+          s.sugarType,
+          s.gds,
+          interp,
+          s.nurseName,
+          s.notes || '-',
+        ];
+      });
+
+      exportToCSV(filename, headers, rows);
+      onShowToast('Rekapan gula darah Excel (CSV) berhasil diunduh.', 'success');
+    } catch {
+      onShowToast('Gagal mengekspor rekapan gula darah ke CSV.', 'error');
+    }
+  };
 
   // Export to Excel
   const handleExportExcel = () => {
@@ -495,6 +620,129 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* 6. Rekapan Pemeriksaan Gula Darah Pasien */}
+      <div className="bg-white rounded-2xl p-4 border border-amber-200/80 shadow-xs space-y-3 text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-100 pb-2.5">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-2xs">
+              <Droplet className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-800 text-xs sm:text-sm">
+                Rekapan Hasil Pemeriksaan Gula Darah Pasien ({sugarReportList.length})
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                Data pemantauan glukosa darah (GDP, GDS, GD2PP, dll.) untuk pasien dalam periode ini
+              </p>
+            </div>
+          </div>
+
+          {sugarReportList.length > 0 && (
+            <button
+              onClick={handleExportSugarCSV}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer self-start sm:self-center shrink-0 active:scale-95"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Unduh Rekapan Gula (CSV)</span>
+            </button>
+          )}
+        </div>
+
+        {sugarReportList.length === 0 ? (
+          <div className="p-6 text-center text-slate-400 space-y-1">
+            <Droplet className="w-8 h-8 text-amber-200 mx-auto" />
+            <p className="font-medium text-slate-600">Tidak ada riwayat pemeriksaan gula darah untuk pasien pada filter ini.</p>
+            <p className="text-[11px] text-slate-400">Hasil pemeriksaan gula darah yang dicatat perawat akan terangkum otomatis di sini.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-xl">
+                <span className="text-[10.5px] font-bold text-amber-900 block">Total Pemeriksaan</span>
+                <span className="text-xl font-black text-amber-950 mt-0.5 block">{sugarReportList.length}</span>
+              </div>
+              <div className="p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+                <span className="text-[10.5px] font-bold text-emerald-800 block">Normal (70-140)</span>
+                <span className="text-xl font-black text-emerald-900 mt-0.5 block">
+                  {sugarReportList.filter(s => s.gds >= 70 && s.gds <= 140).length}
+                </span>
+              </div>
+              <div className="p-2.5 bg-rose-50/70 border border-rose-200 rounded-xl">
+                <span className="text-[10.5px] font-bold text-rose-800 block">Hiperglikemia (≥200)</span>
+                <span className="text-xl font-black text-rose-900 mt-0.5 block">
+                  {sugarReportList.filter(s => s.gds >= 200).length}
+                </span>
+              </div>
+              <div className="p-2.5 bg-rose-50/70 border border-rose-200 rounded-xl">
+                <span className="text-[10.5px] font-bold text-rose-800 block">Hipoglikemia (&lt;70)</span>
+                <span className="text-xl font-black text-rose-900 mt-0.5 block">
+                  {sugarReportList.filter(s => s.gds < 70).length}
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border border-slate-200 rounded-xl overflow-hidden">
+                <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="p-2">Waktu</th>
+                    <th className="p-2">Pasien</th>
+                    <th className="p-2">Ruang/Bed</th>
+                    <th className="p-2">Jenis Pemeriksaan</th>
+                    <th className="p-2 text-right">Hasil (mg/dL)</th>
+                    <th className="p-2">Status Klinis</th>
+                    <th className="p-2">Pemeriksa</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {sugarReportList.map(s => {
+                    let interpBadge = {
+                      text: 'Normal',
+                      bg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                    };
+                    if (s.gds < 70) {
+                      interpBadge = { text: 'Hipoglikemia (<70)', bg: 'bg-rose-100 text-rose-800 border-rose-200' };
+                    } else if (s.sugarType.toLowerCase().includes('puasa')) {
+                      if (s.gds <= 99) interpBadge = { text: 'Normal Puasa (70-99)', bg: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+                      else if (s.gds <= 125) interpBadge = { text: 'Pra-Diabetes (100-125)', bg: 'bg-amber-100 text-amber-800 border-amber-200' };
+                      else interpBadge = { text: 'Tinggi Puasa (≥126)', bg: 'bg-rose-100 text-rose-800 border-rose-200' };
+                    } else {
+                      if (s.gds <= 140) interpBadge = { text: 'Normal (70-140)', bg: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+                      else if (s.gds < 200) interpBadge = { text: 'Meningkat (141-199)', bg: 'bg-amber-100 text-amber-800 border-amber-200' };
+                      else interpBadge = { text: 'Hiperglikemia (≥200)', bg: 'bg-rose-100 text-rose-800 border-rose-200' };
+                    }
+
+                    return (
+                      <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-2 font-mono whitespace-nowrap text-slate-600">{s.timestamp}</td>
+                        <td className="p-2 font-bold text-slate-900">
+                          {s.patientName} <span className="font-mono font-normal text-slate-400">({s.rmNumber})</span>
+                        </td>
+                        <td className="p-2 text-slate-600">{s.room} · {s.bed}</td>
+                        <td className="p-2">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                            {s.sugarType}
+                          </span>
+                        </td>
+                        <td className="p-2 text-right font-black text-sm text-slate-900 tabular-nums">
+                          {s.gds}
+                        </td>
+                        <td className="p-2">
+                          <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold border ${interpBadge.bg}`}>
+                            {interpBadge.text}
+                          </span>
+                        </td>
+                        <td className="p-2 text-slate-600 text-[11px]">{s.nurseName}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
